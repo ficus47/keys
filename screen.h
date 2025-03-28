@@ -4,11 +4,6 @@
 #include <X11/Xutil.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
@@ -104,7 +99,6 @@ void capture_screen_at_fps(int target_fps, const char *output_directory) {
 
     XCloseDisplay(dpy);
 }
-
 
 #endif
 
@@ -269,16 +263,14 @@ void capture_screen_at_fps(int target_fps, const char *output_directory) {
             printf("Image sauvegardée : %s\n", filename);
 
             // Libérer les ressources
-            DeleteObject(hBitmap);
             DeleteDC(hdcMemory);
             ReleaseDC(NULL, hdcScreen);
+            DeleteObject(hBitmap);
 
-            image_counter++; // Incrémenter le compteur d'images
-            last_capture_time = current_time; // Réinitialise l'heure de la dernière capture
+            image_counter++;
+            last_capture_time = current_time;
         }
     }
 }
-
-    //CreateDirectory(output_directory, NULL);
 
 #endif

