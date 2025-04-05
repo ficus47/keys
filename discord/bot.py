@@ -32,29 +32,32 @@ async def on_member_join(member):
 
 @bot.command()
 async def generate(ctx, ip):
-    await ctx.send(f"Generating video for IP: {ip}")
+    channel = bot.get_channel(ID_CANAL)
+    await channel.send(f"Generating video for IP: {ip}")
     # Appelle ta fonction de génération de vidéo
     create_video_with_subtitles(ip, subtitles_file)  # Remplace par ta fonction qui génère la vidéo
-    await ctx.send(f"Video generated for IP: {ip}", file=discord.File("output.avi"))  # Envoie la vidéo générée
+    await channel.send(f"Video generated for IP: {ip}", file=discord.File("output.avi"))  # Envoie la vidéo générée
 
 @bot.command()
 async def generate_since(ctx, ip, second):
-    await ctx.send(f"Generating video for IP: {ip} since {second}")
+    channel = bot.get_channel(ID_CANAL)
+    await channel.send(f"Generating video for IP: {ip} since {second}")
     # Appelle ta fonction de génération de vidéo depuis une seconde donnée
     create_video_with_subtitles_since(ip, subtitles_file, int(second))
-    await ctx.send(f"Video generated for IP: {ip} since {second}", file=discord.File("output.avi"))
+    await channel.send(f"Video generated for IP: {ip} since {second}", file=discord.File("output.avi"))
 
 @bot.command()
 async def delete(ctx, ip, second):
-    await ctx.send(f"Deleting images for IP: {ip} since {second}")
+    channel = bot.get_channel(ID_CANAL)
+    await channel.send(f"Deleting images for IP: {ip} since {second}")
     # Appelle ta fonction pour supprimer les images depuis une seconde donnée
     delete_text_and_image_since(ip, int(second))
-    await ctx.send(f"Images deleted for IP: {ip} since {second}")
+    await channel.send(f"Images deleted for IP: {ip} since {second}")
 
-bot.run("MTM1ODEzNjM1MjgxMzg3OTUzNw.GFPVw_.fMAEg6rgsgD6DlLMcF1HQiyEugA63mhEmMPaYw")  # Remplace par ton token Discord
-
-
+bot.run(open(secret.txt, "r").read())  # Remplace par ton token Discord
 
 
 
-#MTM1ODEzNjM1MjgxMzg3OTUzNw.GFPVw_.fMAEg6rgsgD6DlLMcF1HQiyEugA63mhEmMPaYw
+
+
+#
