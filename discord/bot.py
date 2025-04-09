@@ -1,11 +1,12 @@
 import discord
 from discord.ext import commands
-import image  # Assure-toi d'importer correctement tes fonctions
+from image_maker import *  # Assure-toi d'importer correctement tes fonctions
 
 subtitles_file = "subtitles.txt"  # Remplace par le chemin vers ton fichier de sous-titres
 
 intents = discord.Intents.default()
-intents.messages = True  # Active les intents pour recevoir les messages
+intents.messages = True  # Permet de recevoir les messages
+intents.message_content = True  # Active les intents pour recevoir les messages
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -33,31 +34,40 @@ async def on_member_join(member):
 @bot.command()
 async def generate(ctx, ip):
     channel = bot.get_channel(ID_CANAL)
-    await channel.send(f"Generating video for IP: {ip}")
-    # Appelle ta fonction de génération de vidéo
-    create_video_with_subtitles(ip, subtitles_file)  # Remplace par ta fonction qui génère la vidéo
-    await channel.send(f"Video generated for IP: {ip}", file=discord.File("output.avi"))  # Envoie la vidéo générée
+    try:
+        await channel.send(f"Generating video for IP: {ip}")
+        # Appelle ta fonction de génération de vidéo
+        create_video_with_subtitles(ip, subtitles_file)  # Remplace par ta fonction qui génère la vidéo
+        await channel.send(f"Video generated for IP: {ip}", file=discord.File("output.avi"))  # Envoie la vidéo générée
+    except Exception as e:
+        await channel.send(f"An error occurred: {str(e)}")
 
 @bot.command()
 async def generate_since(ctx, ip, second):
     channel = bot.get_channel(ID_CANAL)
-    await channel.send(f"Generating video for IP: {ip} since {second}")
-    # Appelle ta fonction de génération de vidéo depuis une seconde donnée
-    create_video_with_subtitles_since(ip, subtitles_file, int(second))
-    await channel.send(f"Video generated for IP: {ip} since {second}", file=discord.File("output.avi"))
+    try:
+        await channel.send(f"Generating video for IP: {ip} since {second}")
+        # Appelle ta fonction de génération de vidéo depuis une seconde donnée
+        create_video_with_subtitles_since(ip, subtitles_file, int(second)*1000)
+        await channel.send(f"Video generated for IP: {ip} since {second}", file=discord.File("output.avi"))
+    except Exception as e:
+        await channel.send(f"An error occurred: {str(e)}")
 
 @bot.command()
 async def delete(ctx, ip, second):
     channel = bot.get_channel(ID_CANAL)
-    await channel.send(f"Deleting images for IP: {ip} since {second}")
-    # Appelle ta fonction pour supprimer les images depuis une seconde donnée
-    delete_text_and_image_since(ip, int(second))
-    await channel.send(f"Images deleted for IP: {ip} since {second}")
+    try:
+        await channel.send(f"Deleting images for IP: {ip} since {second}")
+        # Appelle ta fonction pour supprimer les images depuis une seconde donnée
+        delete_text_and_image_since(ip, int(second)*1000)
+        await channel.send(f"Images deleted for IP: {ip} since {second}")
+    except Exception as e:
+        await channel.send(f"An error occurred: {str(e)}")
 
-bot.run(open(secret.txt, "r").read())  # Remplace par ton token Discord
+bot.run("MTM1ODEzNjM1MjgxMzg3OTUzNw.GOz-_-.zTpxkhPCeZwIayhfqO_0Rl9DjQ18bBKgcDh6-0")  # Remplace par ton token Discord
 
 
 
 
 
-#
+# MTM1ODEzNjM1MjgxMzg3OTUzNw.GOz-_-.zTpxkhPCeZwIayhfqO_0Rl9DjQ18bBKgcDh6-0

@@ -22,8 +22,8 @@
 #endif
 
 
-#define SERVER_PORT 9000
-#define BUFFER_SIZE 8192
+#define SERVER_PORT 5050
+#define BUFFER_SIZE 8192*8
 
 // Fonction pour initialiser Winsock sous Windows
 void init_winsock() {
@@ -99,74 +99,114 @@ unsigned long long get_total_size(const char *folder_path) {
     return total_size;
 }
 
-// Fonction pour envoyer un fichier
 int send_file(const char *filename, const char *SERVER_IP, short int delete) {
-    int sock;
-    struct sockaddr_in server_addr;
-    FILE *file;
-    char buffer[BUFFER_SIZE];
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Erreur d'ouverture du fichier");
+        return -1;
+    }
+
+    // Lire le contenu du fichier en mémoire
+    fseek(file, 0, SEEK_END);
+    long filesize = ftell(file);
+    rewind(file);
+
+    char *filedata = malloc(filesize);
+    if (!filedata) {
+        perror("Erreur d'allocation mémoire");
+        fclose(file);
+        return -1;
+    }
+
+    fread(filedata, 1, filesize, file);
+    fclose(file);
+
+    // Préparer la requête HTTP POST avec multipart/form-data
+    char boundary[] = "----BOUNDARY1234567890";
+    char header[1024];
+    snprintf(header, sizeof(header),
+        "--%s\r\n"
+        "Content-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n"
+        "Content-Type: application/octet-stream\r\n\r\n",
+        boundary, filename);
+
+    char footer[64];
+    snprintf(footer, sizeof(footer), "\r\n--%s--\r\n", boundary);
+
+    int content_length = strlen(header) + filesize + strlen(footer);
+    int total_length = content_length + 1024;
+
+    char *request = malloc(total_length);
+    if (!request) {
+        perror("Erreur d'allocation mémoire (request)");
+        free(filedata);
+        return -1;
+    }
+
+    int offset = 0;
+    offset += snprintf(request, total_length,
+        "POST /upload HTTP/1.1\r\n"
+        "Host: %s:%d\r\n"
+        "Content-Type: multipart/form-data; boundary=%s\r\n"
+        "Content-Length: %d\r\n\r\n",
+        SERVER_IP, SERVER_PORT, boundary, content_length);
+
+    memcpy(request + offset, header, strlen(header));
+    offset += strlen(header);
+    memcpy(request + offset, filedata, filesize);
+    offset += filesize;
+    memcpy(request + offset, footer, strlen(footer));
+    offset += strlen(footer);
+
+    free(filedata);
 
     // Initialisation de Winsock sous Windows
     init_winsock();
 
     // Création de la socket
-    sock = socket(AF_INET, SOCK_STREAM, 0);
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
-#ifdef _WIN32
-        fprintf(stderr, "Erreur de création de socket : %d\n", WSAGetLastError());
-#else
         perror("Erreur de création de socket");
-#endif
+        free(request);
         cleanup_winsock();
         return -1;
     }
 
+    struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(SERVER_PORT);
     inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr);
 
-    // Connexion au serveur
+    // Connexion
     if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-#ifdef _WIN32
-        fprintf(stderr, "Erreur de connexion au serveur : %d\n", WSAGetLastError());
-#else
         perror("Erreur de connexion au serveur");
-#endif
         close(sock);
+        free(request);
         cleanup_winsock();
         return -1;
     }
 
-    // Envoi du nom du fichier
-    send(sock, filename, strlen(filename), 0);
+    // Envoi de la requête HTTP
+    send(sock, request, offset, 0);
 
-    // Ouverture du fichier à envoyer
-    file = fopen(filename, "rb");
-    if (!file) {
-        perror("Erreur d'ouverture du fichier");
-        close(sock);
-        cleanup_winsock();
-        return -1;
-    }
+    // Lire réponse (pas strictement nécessaire ici)
+    char response[1024];
+    recv(sock, response, sizeof(response) - 1, 0);
+    response[1023] = '\0';
 
-    // Envoi du fichier en chunks
-    while (!feof(file)) {
-        size_t bytes_read = fread(buffer, 1, BUFFER_SIZE, file);
-        send(sock, buffer, bytes_read, 0);
-    }
+    printf("✅ Fichier %s envoyé via HTTP avec succès !\n", filename);
 
-    printf("✅ Fichier %s envoyé avec succès !\n", filename);
-
-    fclose(file);
     close(sock);
+    free(request);
 
-    if (delete){
+    if (delete) {
         remove(filename);
     }
 
     cleanup_winsock();
     return 0;
 }
+
 
 // Fonction pour envoyer un répertoire entier
 int send_dir(const char *dir_path, const char *ip) {
@@ -183,10 +223,12 @@ int send_dir(const char *dir_path, const char *ip) {
 
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            //printf("e");
             continue;
         }
 
         snprintf(filepath, sizeof(filepath), "%s/%s", dir_path, entry->d_name);
+        printf("%s", filepath);
         send_file(filepath, ip, 1);
     }
 

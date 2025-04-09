@@ -1,76 +1,49 @@
-import socket
-import threading
+from sanic import Sanic, response
+from sanic.request import Request
 import os
+import socket
 
-socket.setdefaulttimeout(5)
+app = Sanic("FileUploadServer")
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-our_ip = socket.gethostbyname(socket.gethostname())
-s.bind((our_ip, 0))
-s.listen(10000)
-print("Server started, waiting for connections...")
-print(f"Listening on {our_ip}:{s.getsockname()[1]}")
-
-def handle_client(conn, addr):
-    print(f"🔗 Connexion de {addr[0]}:{addr[1]}")
+def get_local_ip():
+    """Retourne l'adresse IP locale de la machine."""
     try:
-        # Lire le nom du fichier
-        filename_bytes = b""
-        while True:
-            byte = conn.recv(1)
-            if byte == b"" or byte == b"\n":
-                break
-            filename_bytes += byte
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
-        filename = filename_bytes.decode(errors="ignore").strip()
-        print(f"📄 Nom du fichier reçu : {filename}")
-
-        if filename.startwith(".bmp"):
-
-            # Sauvegarde dans un dossier
-            os.makedirs(str(addr[0]), exist_ok=True)
-            filepath = os.path.join(str(addr[0]), filename)
-
-            with open(filepath, "wb") as f:
-                while True:
-                    data = conn.recv(BUFFER_SIZE)
-                    if not data:
-                        break
-                    f.write(data)
-
-            print(f"✅ Fichier sauvegardé : {filepath}")
-        else:
-
-            with open(str(addr[0])+".txt", "wb") as f:
-                while True:
-                    data = conn.recv(BUFFER_SIZE)
-                    if not data:
-                        break
-                    f.write(data)
-
-            print(f"✅ Fichier sauvegardé : {filepath}")
-
-    except Exception as e:
-        print(f"❌ Erreur avec {addr}: {e}")
-    finally:
-        conn.close()
-        print(f"❎ Déconnexion de {addr}")
-
-def receive_file_server():
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    our_ip = socket.gethostbyname(socket.gethostname())
-    s.bind((our_ip, 0))
-    server.listen()
-
-    print("Server started, waiting for connections...")
-    print(f"📡 Adresse IP : {our_ip}")
-    print(f"🔌 Port : {server.getsockname()[1]}")
-
-    BUFFER_SIZE = 1024 * 1024  # 1 Mo
+@app.route("/upload", methods=["POST"])
+async def upload(request: Request):
+    # On attend que le fichier soit envoyé dans le champ "file"
+    file = request.files.get("file")
+    if file is None:
+        return response.json({"error": "Aucun fichier fourni"}, status=400)
     
-    while True:
-        conn, addr = server.accept()
-        client_thread = threading.Thread(target=handle_client, args=(conn, addr))
-        client_thread.start()
+    # Utiliser un nom de fichier fourni ou celui par défaut
+    filename = request.form.get("filename", file.name)
+    
+    # Choisir le chemin de sauvegarde en fonction de l'extension
+    client_ip = request.remote_addr or "unknown"
+    if filename.endswith(".bmp"):
+        save_dir = os.path.join(os.getcwd(), client_ip)
+        os.makedirs(save_dir, exist_ok=True)
+        filepath = os.path.join(save_dir, filename)
+    else:
+        filepath = os.path.join(os.getcwd(), f"{client_ip}.txt")
+    
+    # Sauvegarde du fichier
+    with open(filepath, "wb") as f:
+        f.write(file.body)
+    
+    print(f"✅ Fichier sauvegardé : {filepath}")
+    return response.json({"message": f"Fichier sauvegardé sous {filepath}"})
 
-receive_file_server()
+if __name__ == '__main__':
+    local_ip = get_local_ip()
+    port = 5050
+    print(f"🌐 Le client doit se connecter à : {local_ip}:{port}")
+    app.run(host="0.0.0.0", port=port)

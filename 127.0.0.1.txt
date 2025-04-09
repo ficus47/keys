@@ -1,0 +1,28 @@
+Accept: image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8
+Host: localhost:8080
+User-Agent: Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36 Edg/109.0.1518.140
+Accept-Encoding: gzip, deflate, br
+Accept-Language: fr,fr-FR;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6
+Referer: https://glorious-broccoli-x5w9qpjp4j54hpg9-8080.app.github.dev/
+X-Request-ID: cf63d9771b1482db7995cc19b88f545d
+X-Real-IP: 109.215.77.66
+X-Forwarded-Port: 443
+X-Forwarded-Scheme: https
+X-Original-URI: /favicon.ico
+X-Scheme: https
+sec-ch-ua: "Not_A Brand";v="99", "Microsoft Edge";v="109", "Chromium";v="109"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Windows"
+sec-fetch-site: same-origin
+sec-fetch-mode: no-cors
+sec-fetch-dest: image
+X-Original-Proto: https
+X-Forwarded-Proto: https
+X-Forwarded-Host: glorious-broccoli-x5w9qpjp4j54hpg9-8080.app.github.dev
+X-Forwarded-For: 109.215.77.66
+Proxy-Connection: Keep-Alive
+
+roccoli-x5w9qpjp4j54hpg9-8080.app.github.dev
+X-Forwarded-For: 109.215.77.66
+Proxy-Connection: Keep-Alive
+

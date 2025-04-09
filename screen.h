@@ -153,124 +153,108 @@ void capture_screen_at_fps(int target_fps, const char *output_directory) {
 #endif
 
 #ifdef __WIN32__
-
+#define COBJMACROS
 #include <windows.h>
+#include <wincodec.h>  // WIC (Windows Imaging Component)
 #include <stdio.h>
+#include <stdint.h>
 #include <time.h>
 
-void save_bitmap(HBITMAP hBitmap, const char *filename) {
-    BITMAP bmp;
-    BITMAPFILEHEADER bfh;
-    BITMAPINFOHEADER bih;
-    PBITMAPINFO pbmi;
-    WORD cClrBits;
-    HANDLE hf;
-    DWORD dwSizeofDIB;
-    PBITMAPINFOHEADER pbih;
-    PBYTE lpBits;
-    DWORD dwWritten;
+#pragma comment(lib, "windowscodecs.lib")
 
-    // Récupérer les informations de l'image bitmap
-    if (!GetObject(hBitmap, sizeof(BITMAP), (LPSTR)&bmp)) {
-        printf("GetObject failed\n");
-        return;
-    }
+void save_hbitmap_as_jpeg(HBITMAP hBitmap, const wchar_t *filename) {
+    IWICImagingFactory *pFactory = NULL;
+    IWICBitmapEncoder *pEncoder = NULL;
+    IWICBitmapFrameEncode *pFrame = NULL;
+    IWICStream *pStream = NULL;
+    IWICBitmap *pBitmap = NULL;
 
-    // Calculer la taille du fichier DIB
-    cClrBits = (WORD)(bmp.bmBitsPixel * bmp.bmPlanes);
-    if (cClrBits == 1) {
-        cClrBits = 24;
-    }
+    HRESULT hr = CoInitialize(NULL);
+    if (FAILED(hr)) return;
 
-    // Configuration de l'en-tête du fichier
-    bfh.bfType = 0x4D42; // "BM"
-    bfh.bfReserved1 = 0;
-    bfh.bfReserved2 = 0;
-    bfh.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+    hr = CoCreateInstance(&CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER,
+                          &IID_IWICImagingFactory, (LPVOID*)&pFactory);
+    if (FAILED(hr)) goto cleanup;
 
-    dwSizeofDIB = bmp.bmWidthBytes * bmp.bmHeight;
-    bih.biSize = sizeof(BITMAPINFOHEADER);
-    bih.biWidth = bmp.bmWidth;
-    bih.biHeight = bmp.bmHeight;
-    bih.biPlanes = 1;
-    bih.biBitCount = 24;
-    bih.biCompression = BI_RGB;
-    bih.biSizeImage = dwSizeofDIB;
-    bih.biXPelsPerMeter = 0;
-    bih.biYPelsPerMeter = 0;
-    bih.biClrUsed = 0;
-    bih.biClrImportant = 0;
+    hr = IWICImagingFactory_CreateStream(pFactory, &pStream);
+    if (FAILED(hr)) goto cleanup;
 
-    // Créer le fichier
-    hf = CreateFile(filename, GENERIC_READ | GENERIC_WRITE, (DWORD)0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hf == INVALID_HANDLE_VALUE) {
-        printf("CreateFile failed\n");
-        return;
-    }
+    hr = IWICStream_InitializeFromFilename(pStream, filename, GENERIC_WRITE);
+    if (FAILED(hr)) goto cleanup;
 
-    // Écrire l'en-tête du fichier BMP
-    WriteFile(hf, (LPSTR)&bfh, sizeof(BITMAPFILEHEADER), &dwWritten, NULL);
-    WriteFile(hf, (LPSTR)&bih, sizeof(BITMAPINFOHEADER), &dwWritten, NULL);
+    hr = IWICImagingFactory_CreateEncoder(pFactory, &GUID_ContainerFormatJpeg, NULL, &pEncoder);
+    if (FAILED(hr)) goto cleanup;
 
-    pbmi = (PBITMAPINFO)GlobalAlloc(GPTR, sizeof(BITMAPINFOHEADER) + sizeof(RGBQUAD) * 256);
-    pbih = (PBITMAPINFOHEADER)pbmi;
+    hr = IWICBitmapEncoder_Initialize(pEncoder, (IStream*)pStream, WICBitmapEncoderNoCache);
+    if (FAILED(hr)) goto cleanup;
 
-    // Ecrire les données de l'image
-    lpBits = (PBYTE)GlobalAlloc(GPTR, dwSizeofDIB);
-    if (lpBits == NULL) {
-        printf("Memory allocation failed\n");
-        return;
-    }
+    hr = IWICBitmapEncoder_CreateNewFrame(pEncoder, &pFrame, NULL);
+    if (FAILED(hr)) goto cleanup;
 
-    GetDIBits(GetDC(0), hBitmap, 0, (UINT)bmp.bmHeight, lpBits, pbmi, DIB_RGB_COLORS);
-    WriteFile(hf, lpBits, dwSizeofDIB, &dwWritten, NULL);
+    hr = IWICBitmapFrameEncode_Initialize(pFrame, NULL);
+    if (FAILED(hr)) goto cleanup;
 
-    // Libérer la mémoire et fermer le fichier
-    GlobalFree(lpBits);
-    GlobalFree(pbmi);
-    CloseHandle(hf);
+    // Convert HBITMAP to IWICBitmap
+    hr = IWICImagingFactory_CreateBitmapFromHBITMAP(pFactory, hBitmap, NULL, WICBitmapUseAlpha, &pBitmap);
+    if (FAILED(hr)) goto cleanup;
+
+    hr = IWICBitmapFrameEncode_WriteSource(pFrame, (IWICBitmapSource*)pBitmap, NULL);
+    if (FAILED(hr)) goto cleanup;
+
+    IWICBitmapFrameEncode_Commit(pFrame);
+    IWICBitmapEncoder_Commit(pEncoder);
+
+cleanup:
+    if (pBitmap) IWICBitmap_Release(pBitmap);
+    if (pFrame) IWICBitmapFrameEncode_Release(pFrame);
+    if (pEncoder) IWICBitmapEncoder_Release(pEncoder);
+    if (pStream) IWICStream_Release(pStream);
+    if (pFactory) IWICImagingFactory_Release(pFactory);
+    CoUninitialize();
 }
 
-void capture_screen_at_fps(int target_fps, const char *output_directory) {
-    clock_t last_capture_time = clock();
-    int target_delay = CLOCKS_PER_SEC / target_fps;
-    int image_counter = 0;
+void capture_screen_720p(const wchar_t *output_dir, int fps) {
+    int width = GetSystemMetrics(SM_CXSCREEN);
+    int height = GetSystemMetrics(SM_CYSCREEN);
+
+    int target_width = 1280;
+    int target_height = 720;
+
+    HDC hScreen = GetDC(NULL);
+    HDC hdcFull = CreateCompatibleDC(hScreen);
+    HDC hdcScaled = CreateCompatibleDC(hScreen);
+
+    HBITMAP hbmpFull = CreateCompatibleBitmap(hScreen, width, height);
+    HBITMAP hbmpScaled = CreateCompatibleBitmap(hScreen, target_width, target_height);
+
+    SelectObject(hdcFull, hbmpFull);
+    SelectObject(hdcScaled, hbmpScaled);
 
     while (1) {
-        clock_t current_time = clock();
-        int time_diff = current_time - last_capture_time;
+        BitBlt(hdcFull, 0, 0, width, height, hScreen, 0, 0, SRCCOPY);
 
-        // Si le temps écoulé est plus grand que le délai cible, on capture
-        if (time_diff >= target_delay) {
-            HDC hdcScreen = GetDC(NULL);
-            HDC hdcMemory = CreateCompatibleDC(hdcScreen);
-            int screen_width = GetSystemMetrics(SM_CXSCREEN);
-            int screen_height = GetSystemMetrics(SM_CYSCREEN);
+        SetStretchBltMode(hdcScaled, HALFTONE);
+        StretchBlt(hdcScaled, 0, 0, target_width, target_height, hdcFull, 0, 0, width, height, SRCCOPY);
 
-            // Créer une image compatible avec la taille de l'écran
-            HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, screen_width, screen_height);
-            SelectObject(hdcMemory, hBitmap);
+        FILETIME ft;
+        GetSystemTimeAsFileTime(&ft);
+        ULONGLONG time = ((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+        ULONGLONG ms = (time - 116444736000000000ULL) / 10000;
 
-            // Copier l'image de l'écran dans le hBitmap
-            BitBlt(hdcMemory, 0, 0, screen_width, screen_height, hdcScreen, 0, 0, SRCCOPY);
+        wchar_t filename[512];
+        swprintf(filename, 512, L"%s\\%llu.jpg", output_dir, ms);
+        save_hbitmap_as_jpeg(hbmpScaled, filename);
 
-            // Créer un nom de fichier unique basé sur le compteur d'image
-            char filename[1024];
-            snprintf(filename, sizeof(filename), "%s\\screenshot_%d.bmp", output_directory, image_counter);
-
-            // Sauvegarder l'image capturée dans le fichier
-            save_bitmap(hBitmap, filename);
-            printf("Image sauvegardée : %s\n", filename);
-
-            // Libérer les ressources
-            DeleteDC(hdcMemory);
-            ReleaseDC(NULL, hdcScreen);
-            DeleteObject(hBitmap);
-
-            image_counter++;
-            last_capture_time = current_time;
-        }
+        wprintf(L"[+] Sauvé : %s\n", filename);
+        Sleep(1000 / fps);
     }
+
+    DeleteObject(hbmpFull);
+    DeleteObject(hbmpScaled);
+    DeleteDC(hdcFull);
+    DeleteDC(hdcScaled);
+    ReleaseDC(NULL, hScreen);
 }
+
 
 #endif
