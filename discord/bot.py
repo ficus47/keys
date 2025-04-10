@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from image_maker import *  # Assure-toi d'importer correctement tes fonctions
 
-subtitles_file = "subtitles.txt"  # Remplace par le chemin vers ton fichier de sous-titres
+subtitles_file = ".txt"  # Remplace par le chemin vers ton fichier de sous-titres
 
 intents = discord.Intents.default()
 intents.messages = True  # Permet de recevoir les messages
@@ -37,7 +37,7 @@ async def generate(ctx, ip):
     try:
         await channel.send(f"Generating video for IP: {ip}")
         # Appelle ta fonction de génération de vidéo
-        create_video_with_subtitles(ip, subtitles_file)  # Remplace par ta fonction qui génère la vidéo
+        create_video_with_subtitles(ip, ip+subtitles_file)  # Remplace par ta fonction qui génère la vidéo
         await channel.send(f"Video generated for IP: {ip}", file=discord.File("output.avi"))  # Envoie la vidéo générée
     except Exception as e:
         await channel.send(f"An error occurred: {str(e)}")
@@ -48,7 +48,7 @@ async def generate_since(ctx, ip, second):
     try:
         await channel.send(f"Generating video for IP: {ip} since {second}")
         # Appelle ta fonction de génération de vidéo depuis une seconde donnée
-        create_video_with_subtitles_since(ip, subtitles_file, int(second)*1000)
+        create_video_with_subtitles_since(ip, ip+subtitles_file, int(second)*1000)
         await channel.send(f"Video generated for IP: {ip} since {second}", file=discord.File("output.avi"))
     except Exception as e:
         await channel.send(f"An error occurred: {str(e)}")
@@ -64,10 +64,10 @@ async def delete(ctx, ip, second):
     except Exception as e:
         await channel.send(f"An error occurred: {str(e)}")
 
-bot.run("MTM1ODEzNjM1MjgxMzg3OTUzNw.GOz-_-.zTpxkhPCeZwIayhfqO_0Rl9DjQ18bBKgcDh6-0")  # Remplace par ton token Discord
+bot.run("MTM1ODEzNjM1MjgxMzg3OTUzNw.GtCtaq.2dVxJTFdgSrNkYn42lOxR9iK_MqpguNyZEpC5Q")  # Remplace par ton token Discord
 
 
 
 
 
-# MTM1ODEzNjM1MjgxMzg3OTUzNw.GOz-_-.zTpxkhPCeZwIayhfqO_0Rl9DjQ18bBKgcDh6-0
+# MTM1ODEzNjM1MjgxMzg3OTUzNw.GtCtaq.2dVxJTFdgSrNkYn42lOxR9iK_MqpguNyZEpC5Q

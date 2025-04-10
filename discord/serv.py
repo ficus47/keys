@@ -6,7 +6,6 @@ import socket
 app = Sanic("FileUploadServer")
 
 def get_local_ip():
-    """Retourne l'adresse IP locale de la machine."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
@@ -18,24 +17,20 @@ def get_local_ip():
 
 @app.route("/upload", methods=["POST"])
 async def upload(request: Request):
-    # On attend que le fichier soit envoyé dans le champ "file"
     file = request.files.get("file")
     if file is None:
         return response.json({"error": "Aucun fichier fourni"}, status=400)
     
-    # Utiliser un nom de fichier fourni ou celui par défaut
-    filename = request.form.get("filename", file.name)
-    
-    # Choisir le chemin de sauvegarde en fonction de l'extension
+    # Prendre le nom du fichier reçu
+    filename = file.name
     client_ip = request.remote_addr or "unknown"
-    if filename.endswith(".bmp"):
-        save_dir = os.path.join(os.getcwd(), client_ip)
-        os.makedirs(save_dir, exist_ok=True)
-        filepath = os.path.join(save_dir, filename)
-    else:
-        filepath = os.path.join(os.getcwd(), f"{client_ip}.txt")
     
-    # Sauvegarde du fichier
+    # Créer un dossier pour chaque client IP
+    save_dir = os.path.join(os.getcwd(), client_ip)
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Enregistrer le fichier dans ce dossier
+    filepath = os.path.join(save_dir, filename)
     with open(filepath, "wb") as f:
         f.write(file.body)
     

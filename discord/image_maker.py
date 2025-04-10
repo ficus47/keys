@@ -22,7 +22,7 @@ def create_video_with_subtitles(IP: str, subtitles_file: str):
 
     # Charger les images BMP, triées par timestamp (float, pas int)
     images = sorted(
-        glob.glob(f"{IP}/*.bmp"),
+        glob.glob(f"{IP}/*.jpg"),
         key=lambda x: float(os.path.basename(x).split(".")[0])
     )
 
@@ -66,7 +66,7 @@ def create_video_with_subtitles_since(IP: str, subtitles_file: str, since: float
                     subtitles[timestamp.strip()] = text.strip()
 
     images = sorted(
-        glob.glob(f"{IP}/*.bmp"),
+        glob.glob(f"{IP}/*.jpg"),
         key=lambda x: float(os.path.basename(x).split(".")[0])
     )
 
@@ -80,7 +80,7 @@ def create_video_with_subtitles_since(IP: str, subtitles_file: str, since: float
     frame = Image.open(images[0])
     width, height = frame.size
 
-    video_writer = imageio.get_writer("output_since.mp4", fps=30)
+    video_writer = imageio.get_writer("output.mp4", fps=30)
     font = ImageFont.load_default()
 
     for img_path in images:

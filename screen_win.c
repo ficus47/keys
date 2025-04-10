@@ -83,8 +83,3 @@ void capture_screen_at_fps(int target_fps, const char *output_directory) {
         Sleep(1);
     }
 }
-
-int main(){
-    makedir(.output_screen);
-    
-}
