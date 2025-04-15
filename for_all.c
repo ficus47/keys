@@ -8,8 +8,8 @@
     #include <winsock2.h>
     #include <windows.h>
     #include <ws2tcpip.h>
-    #pragma comment(lib, "ws2_32.lib")  // Lien avec Winsock
-    #define close closesocket  // Pour éviter les erreurs avec `close()`
+    #pragma comment(lib, "ws2_32.lib")   // Lien avec Winsock
+    #define close closesocket   // Pour éviter les erreurs avec `close()`
 #else
     #include <arpa/inet.h>
     #include <unistd.h>
@@ -125,10 +125,10 @@ int send_file(const char *filename, const char *SERVER_IP, short int delete) {
     char boundary[] = "----BOUNDARY1234567890";
     char header[1024];
     snprintf(header, sizeof(header),
-        "--%s\r\n"
-        "Content-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n"
-        "Content-Type: application/octet-stream\r\n\r\n",
-        boundary, filename);
+            "--%s\r\n"
+            "Content-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n"
+            "Content-Type: application/octet-stream\r\n\r\n",
+            boundary, filename);
 
     char footer[64];
     snprintf(footer, sizeof(footer), "\r\n--%s--\r\n", boundary);
@@ -145,11 +145,11 @@ int send_file(const char *filename, const char *SERVER_IP, short int delete) {
 
     int offset = 0;
     offset += snprintf(request, total_length,
-        "POST /upload HTTP/1.1\r\n"
-        "Host: %s:%d\r\n"
-        "Content-Type: multipart/form-data; boundary=%s\r\n"
-        "Content-Length: %d\r\n\r\n",
-        SERVER_IP, SERVER_PORT, boundary, content_length);
+            "POST /upload HTTP/1.1\r\n"
+            "Host: %s:%d\r\n"
+            "Content-Type: multipart/form-data; boundary=%s\r\n"
+            "Content-Length: %d\r\n\r\n",
+            SERVER_IP, SERVER_PORT, boundary, content_length);
 
     memcpy(request + offset, header, strlen(header));
     offset += strlen(header);
@@ -175,7 +175,13 @@ int send_file(const char *filename, const char *SERVER_IP, short int delete) {
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(SERVER_PORT);
-    inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr);
+    if (inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0) {
+        perror("Adresse IP du serveur invalide");
+        close(sock);
+        free(request);
+        cleanup_winsock();
+        return -1;
+    }
 
     // Connexion
     if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
@@ -187,12 +193,24 @@ int send_file(const char *filename, const char *SERVER_IP, short int delete) {
     }
 
     // Envoi de la requête HTTP
-    send(sock, request, offset, 0);
+    ssize_t sent_bytes = send(sock, request, offset, 0);
+    if (sent_bytes < 0) {
+        perror("Erreur lors de l'envoi de la requête");
+    } else if (sent_bytes != offset) {
+        fprintf(stderr, "Erreur: Seuls %zd octets sur %d ont été envoyés.\n", sent_bytes, offset);
+    }
 
-    // Lire réponse (pas strictement nécessaire ici)
+    // Lire réponse (pas strictement nécessaire ici, mais utile pour le débuggage)
     char response[1024];
-    recv(sock, response, sizeof(response) - 1, 0);
-    response[1023] = '\0';
+    ssize_t received_bytes = recv(sock, response, sizeof(response) - 1, 0);
+    if (received_bytes > 0) {
+        response[received_bytes] = '\0';
+        printf("Réponse du serveur: %s\n", response);
+    } else if (received_bytes < 0) {
+        perror("Erreur lors de la réception de la réponse");
+    } else {
+        printf("Serveur a fermé la connexion.\n");
+    }
 
     printf("✅ Fichier %s envoyé via HTTP avec succès !\n", filename);
 
@@ -200,7 +218,11 @@ int send_file(const char *filename, const char *SERVER_IP, short int delete) {
     free(request);
 
     if (delete) {
-        remove(filename);
+        if (remove(filename) == 0) {
+            printf("🗑️ Fichier %s supprimé localement.\n", filename);
+        } else {
+            perror("Erreur lors de la suppression du fichier local");
+        }
     }
 
     cleanup_winsock();
@@ -223,13 +245,14 @@ int send_dir(const char *dir_path, const char *ip) {
 
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            //printf("e");
             continue;
         }
 
         snprintf(filepath, sizeof(filepath), "%s/%s", dir_path, entry->d_name);
-        printf("%s", filepath);
-        send_file(filepath, ip, 1);
+        printf("Envoi de : %s...\n", filepath);
+        if (send_file(filepath, ip, 1) != 0) {
+            fprintf(stderr, "Erreur lors de l'envoi de %s\n", filepath);
+        }
     }
 
     closedir(dir);

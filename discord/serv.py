@@ -1,44 +1,48 @@
-from sanic import Sanic, response
-from sanic.request import Request
-import os
 import socket
+import os
 
-app = Sanic("FileUploadServer")
+HOST = "0.0.0.0"
+PORT = 8888
 
-def get_local_ip():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        return "127.0.0.1"
+def start_server():
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind((HOST, PORT))
+    server_socket.listen(5)
+    print(f"🟢 Serveur TCP en écoute sur {HOST}:{PORT}")
 
-@app.route("/upload", methods=["POST"])
-async def upload(request: Request):
-    file = request.files.get("file")
-    if file is None:
-        return response.json({"error": "Aucun fichier fourni"}, status=400)
-    
-    # Prendre le nom du fichier reçu
-    filename = file.name
-    client_ip = request.remote_addr or "unknown"
-    
-    # Créer un dossier pour chaque client IP
-    save_dir = os.path.join(os.getcwd(), client_ip)
-    os.makedirs(save_dir, exist_ok=True)
-    
-    # Enregistrer le fichier dans ce dossier
-    filepath = os.path.join(save_dir, filename)
-    with open(filepath, "wb") as f:
-        f.write(file.body)
-    
-    print(f"✅ Fichier sauvegardé : {filepath}")
-    return response.json({"message": f"Fichier sauvegardé sous {filepath}"})
+    while True:
+        client_socket, client_address = server_socket.accept()
+        print(f"📥 Connexion de {client_address[0]}")
 
-if __name__ == '__main__':
-    local_ip = get_local_ip()
-    port = 5050
-    print(f"🌐 Le client doit se connecter à : {local_ip}:{port}")
-    app.run(host="0.0.0.0", port=port)
+        try:
+            data = b""
+            while True:
+                chunk = client_socket.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+
+            if b"\n" not in data:
+                print("⛔ Données mal formées, nom de fichier manquant.")
+                continue
+
+            # Séparer nom de fichier et contenu
+            filename_raw, file_content = data.split(b"\n", 1)
+            filename = filename_raw.decode(errors="ignore").strip()
+
+            # Créer dossier selon IP
+            save_dir = os.path.join(os.getcwd(), client_address[0])
+            os.makedirs(save_dir, exist_ok=True)
+
+            filepath = os.path.join(save_dir, filename)
+            with open(filepath, "wb") as f:
+                f.write(file_content)
+
+            print(f"✅ Fichier reçu : {filepath}")
+        except Exception as e:
+            print(f"❌ Erreur pendant la réception : {e}")
+        finally:
+            client_socket.close()
+
+if __name__ == "__main__":
+    start_server()

