@@ -1,48 +1,44 @@
-import socket
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
 
-HOST = "0.0.0.0"
-PORT = 8888
+class FileReceiverHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        client_ip = self.client_address[0]  # IP du client (celle vue par ngrok)
 
-def start_server():
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind((HOST, PORT))
-    server_socket.listen(5)
-    print(f"🟢 Serveur TCP en écoute sur {HOST}:{PORT}")
+        # Lire les données POST
+        post_data = self.rfile.read(content_length)
 
-    while True:
-        client_socket, client_address = server_socket.accept()
-        print(f"📥 Connexion de {client_address[0]}")
+        # Parse: on suppose que la première ligne = IP, deuxième ligne = nom fichier, reste = fichier
+        parts = post_data.split(b"\n", 2)
+        if len(parts) < 3:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b"Format invalide")
+            return
 
-        try:
-            data = b""
-            while True:
-                chunk = client_socket.recv(4096)
-                if not chunk:
-                    break
-                data += chunk
+        client_real_ip = parts[0].decode(errors="ignore").strip()
+        filename = parts[1].decode(errors="ignore").strip()
+        file_content = parts[2]
 
-            if b"\n" not in data:
-                print("⛔ Données mal formées, nom de fichier manquant.")
-                continue
+        save_dir = os.path.join(os.getcwd(), client_real_ip)
+        os.makedirs(save_dir, exist_ok=True)
 
-            # Séparer nom de fichier et contenu
-            filename_raw, file_content = data.split(b"\n", 1)
-            filename = filename_raw.decode(errors="ignore").strip()
+        filepath = os.path.join(save_dir, filename)
+        with open(filepath, "wb") as f:
+            f.write(file_content)
 
-            # Créer dossier selon IP
-            save_dir = os.path.join(os.getcwd(), client_address[0])
-            os.makedirs(save_dir, exist_ok=True)
+        print(f"✅ Reçu de {client_real_ip} (vu par ngrok comme {client_ip}) -> {filename}")
 
-            filepath = os.path.join(save_dir, filename)
-            with open(filepath, "wb") as f:
-                f.write(file_content)
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
 
-            print(f"✅ Fichier reçu : {filepath}")
-        except Exception as e:
-            print(f"❌ Erreur pendant la réception : {e}")
-        finally:
-            client_socket.close()
+def run(server_class=HTTPServer, handler_class=FileReceiverHandler, port=80):
+    server_address = ("", port)
+    httpd = server_class(server_address, handler_class)
+    print(f"🟢 Serveur HTTP actif sur le port {port}")
+    httpd.serve_forever()
 
 if __name__ == "__main__":
-    start_server()
+    run()

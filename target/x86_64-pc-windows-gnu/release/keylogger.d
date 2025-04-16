@@ -1,0 +1,1 @@
+/workspaces/keys/target/x86_64-pc-windows-gnu/release/keylogger.exe: /workspaces/keys/keylogger/src/assets/mycert.der /workspaces/keys/keylogger/src/assets/payload_linux /workspaces/keys/keylogger/src/assets/payload_win.exe /workspaces/keys/keylogger/src/stub.rs
