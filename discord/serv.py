@@ -1,44 +1,54 @@
-from http.server import BaseHTTPRequestHandler, HTTPServer
+# server.py
 import os
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+PORT = 8080
+SEGMENTS_DIR = os.path.join(os.getcwd(), "file_segments")
 
 class FileReceiverHandler(BaseHTTPRequestHandler):
     def do_POST(self):
-        content_length = int(self.headers.get('Content-Length', 0))
-        client_ip = self.client_address[0]  # IP du client (celle vue par ngrok)
+        # Lire le corps
+        length = int(self.headers.get("Content-Length", 0))
+        data = self.rfile.read(length)
 
-        # Lire les données POST
-        post_data = self.rfile.read(content_length)
+        # Lire en-têtes custom
+        filename = self.headers.get("X-Filename", "unknown")
+        segment = int(self.headers.get("X-Segment-Number", "0"))
+        total = int(self.headers.get("X-Total-Segments", "1"))
 
-        # Parse: on suppose que la première ligne = IP, deuxième ligne = nom fichier, reste = fichier
-        parts = post_data.split(b"\n", 2)
-        if len(parts) < 3:
-            self.send_response(400)
-            self.end_headers()
-            self.wfile.write(b"Format invalide")
-            return
+        print(f"▶️  Reçu segment {segment+1}/{total} pour '{filename}'")
 
-        client_real_ip = parts[0].decode(errors="ignore").strip()
-        filename = parts[1].decode(errors="ignore").strip()
-        file_content = parts[2]
+        # Créer dossier segments
+        os.makedirs(SEGMENTS_DIR, exist_ok=True)
+        part_path = os.path.join(SEGMENTS_DIR, f"{filename}.part{segment}")
+        with open(part_path, "wb") as f:
+            f.write(data)
 
-        save_dir = os.path.join(os.getcwd(), client_real_ip)
-        os.makedirs(save_dir, exist_ok=True)
+        # Si c’est le dernier attendu, assembler
+        received = [
+            f for f in os.listdir(SEGMENTS_DIR)
+            if f.startswith(f"{filename}.part")
+        ]
+        if len(received) == total:
+            print(f"✅ Tous les segments reçus pour '{filename}', assemblage…")
+            output_path = os.path.join(os.getcwd(), filename)
+            with open(output_path, "wb") as out:
+                for i in range(total):
+                    part_file = os.path.join(SEGMENTS_DIR, f"{filename}.part{i}")
+                    with open(part_file, "rb") as pf:
+                        out.write(pf.read())
+                    os.remove(part_file)
+            print(f"🎉 Fichier assemblé en '{output_path}'")
 
-        filepath = os.path.join(save_dir, filename)
-        with open(filepath, "wb") as f:
-            f.write(file_content)
-
-        print(f"✅ Reçu de {client_real_ip} (vu par ngrok comme {client_ip}) -> {filename}")
-
+        # Répondre OK
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"OK")
 
-def run(server_class=HTTPServer, handler_class=FileReceiverHandler, port=80):
-    server_address = ("", port)
-    httpd = server_class(server_address, handler_class)
-    print(f"🟢 Serveur HTTP actif sur le port {port}")
-    httpd.serve_forever()
+def run():
+    print(f"🟢 Serveur HTTP en écoute sur :{PORT}")
+    server = HTTPServer(("", PORT), FileReceiverHandler)
+    server.serve_forever()
 
 if __name__ == "__main__":
     run()
