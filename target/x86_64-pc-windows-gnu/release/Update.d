@@ -1,0 +1,1 @@
+/workspaces/keys/target/x86_64-pc-windows-gnu/release/Update.exe: /workspaces/keys/Update/build.rs /workspaces/keys/Update/src/assets/WinDrvUpdater.exe /workspaces/keys/Update/src/stub.rs /workspaces/keys/target/x86_64-pc-windows-gnu/release/sending.exe

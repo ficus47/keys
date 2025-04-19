@@ -1,0 +1,18 @@
+[package]
+name = "Update"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dirs = "4.0"
+winapi = { version = "0.3", features = ["winuser", "winnt", "winbase"] }
+
+[[bin]]
+name = "Update"
+path = "src/stub.rs"
+
+[build-dependencies]
+winres = "0.1.12"
+
+[build]
+rustflags = ["-C", "link-args=/SUBSYSTEM:WINDOWS"]
